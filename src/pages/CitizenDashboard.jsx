@@ -138,7 +138,32 @@ export default function CitizenDashboard() {
     async function loadReports() {
       try {
         const data = await fetchReports();
-        setReports(data);
+        
+        let updated = false;
+        const migratedData = await Promise.all(data.map(async (r) => {
+          const isDefaultCoords = (Math.abs(r.lat - 12.9716) < 0.0001 && Math.abs(r.lng - 77.5946) < 0.0001) || !r.lat;
+          const isCustomLocation = r.location && !r.location.includes('Bengaluru') && !r.location.includes('Pine Street') && !r.location.includes('Broadway') && !r.location.includes('Oak Park');
+          
+          if (isDefaultCoords && isCustomLocation) {
+            try {
+              const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(r.location)}&limit=1`);
+              const geocode = await res.json();
+              if (geocode && geocode.length > 0) {
+                r.lat = parseFloat(geocode[0].lat);
+                r.lng = parseFloat(geocode[0].lon);
+                updated = true;
+              }
+            } catch (err) {
+              console.error("Migration geocode failed for location:", r.location, err);
+            }
+          }
+          return r;
+        }));
+
+        if (updated) {
+          localStorage.setItem('jaan_sathi_reports', JSON.stringify(migratedData));
+        }
+        setReports(migratedData);
       } catch (err) {
         console.error("Failed to load reports:", err);
       }

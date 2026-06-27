@@ -170,12 +170,19 @@ const getStoredReports = () => {
     let reports = JSON.parse(data);
     let updated = false;
     
-    // Database Migration: Ensure all reports have valid coordinates
+    // Database Migration: Ensure all reports have valid coordinates and valid image URLs
     reports = reports.map(r => {
+      let isChanged = false;
       if (r.lat === undefined || r.lng === undefined) {
-        // Assign coordinates in Bangalore area
         r.lat = 12.9716 + (Math.random() - 0.5) * 0.15;
         r.lng = 77.5946 + (Math.random() - 0.5) * 0.15;
+        isChanged = true;
+      }
+      if (r.imageUrl && r.imageUrl.startsWith('blob:')) {
+        r.imageUrl = 'https://images.unsplash.com/photo-1515162305285-0293e4767cc2?auto=format&fit=crop&q=80&w=800';
+        isChanged = true;
+      }
+      if (isChanged) {
         updated = true;
       }
       return r;
