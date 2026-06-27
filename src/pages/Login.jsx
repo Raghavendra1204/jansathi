@@ -58,9 +58,25 @@ export default function Login() {
       if (isMockFirebase) {
         const mockUsers = JSON.parse(localStorage.getItem('mock_users') || '{}');
         const profile = mockUsers[firebaseUser.uid];
-        if (profile && profile.role === 'officer') {
-          navigate('/officer-dashboard');
+        
+        if (profile) {
+          const actualRole = profile.role || 'citizen';
+          if (actualRole !== activeRole) {
+            setError(`Access Denied: The credentials entered do not belong to a ${activeRole === 'officer' ? 'Government Officer' : 'Citizen Volunteer'}.`);
+            setLoading(false);
+            return;
+          }
+          if (actualRole === 'officer') {
+            navigate('/officer-dashboard');
+          } else {
+            navigate('/citizen-dashboard');
+          }
         } else {
+          if (activeRole !== 'citizen') {
+            setError(`Access Denied: The credentials entered do not belong to a Government Officer.`);
+            setLoading(false);
+            return;
+          }
           navigate('/citizen-dashboard');
         }
         return;
@@ -71,13 +87,25 @@ export default function Login() {
       
       if (userDoc.exists()) {
         const profile = userDoc.data();
-        if (profile.role === 'officer') {
+        const actualRole = profile.role || 'citizen';
+        
+        if (actualRole !== activeRole) {
+          setError(`Access Denied: The credentials entered do not belong to a ${activeRole === 'officer' ? 'Government Officer' : 'Citizen Volunteer'}.`);
+          setLoading(false);
+          return;
+        }
+        
+        if (actualRole === 'officer') {
           navigate('/officer-dashboard');
         } else {
           navigate('/citizen-dashboard');
         }
       } else {
-        // Fallback if user doc doesn't exist
+        if (activeRole !== 'citizen') {
+          setError(`Access Denied: The credentials entered do not belong to a Government Officer.`);
+          setLoading(false);
+          return;
+        }
         navigate('/citizen-dashboard');
       }
     } catch (err) {
