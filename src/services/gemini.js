@@ -147,3 +147,35 @@ export async function chatWithGemini(history) {
     return localMockChatResponder(history);
   }
 }
+
+/**
+ * Translates a given text string into the target language using Gemini.
+ */
+export async function translateTextWithGemini(text, targetLang) {
+  if (isMockGemini || !genAI) {
+    // Local static translator fallbacks will handle this offline
+    return text;
+  }
+
+  try {
+    const langMap = {
+      hi: 'Hindi',
+      te: 'Telugu',
+      kn: 'Kannada',
+      ta: 'Tamil',
+      en: 'English'
+    };
+    const langName = langMap[targetLang] || targetLang;
+    const prompt = `Translate the following text into ${langName}. Return ONLY the translated text. Do not add comments, quotes, or markdown format:
+    
+    "${text}"`;
+
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    return response.text().trim();
+  } catch (error) {
+    console.error("Gemini translation failed:", error);
+    return text;
+  }
+}

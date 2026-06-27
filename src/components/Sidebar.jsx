@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { fetchNotifications } from '../services/api';
+import { useTranslation } from '../context/TranslationContext';
 
 export default function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -13,6 +14,7 @@ export default function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
   const [unreadCount, setUnreadCount] = useState(0);
+  const { t } = useTranslation();
 
   const toggleMobileMenu = () => setMobileOpen(!mobileOpen);
   const closeMobileMenu = () => setMobileOpen(false);
@@ -63,6 +65,7 @@ export default function Sidebar() {
   };
 
   const navLinks = user ? [
+    { to: '/', label: 'Home Feed', icon: Home },
     { to: user.role === 'officer' ? '/officer-dashboard' : '/citizen-dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/profile?tab=profile', label: 'Profile', icon: User },
     { to: '/profile?tab=communities', label: 'Communities', icon: Users },
@@ -109,7 +112,7 @@ export default function Sidebar() {
         {/* Navigation Menu */}
         <div className="flex flex-col gap-1">
           <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest px-3 mb-1 shrink-0">
-            Portal Workspace
+            {t("Portal Workspace")}
           </span>
           
           {navLinks.map((link, idx) => {
@@ -123,7 +126,7 @@ export default function Sidebar() {
                 >
                   <div className="flex items-center gap-3">
                     <Icon className="w-4 h-4 shrink-0" />
-                    <span>{link.label}</span>
+                    <span>{t(link.label)}</span>
                   </div>
                   {link.badgeCount > 0 && (
                     <span className="bg-blue-600 text-white font-extrabold text-[8px] px-1.5 py-0.5 rounded-full shrink-0">
@@ -146,7 +149,7 @@ export default function Sidebar() {
                 }`}
               >
                 <Icon className="w-4 h-4 shrink-0" />
-                <span>{link.label}</span>
+                <span>{t(link.label)}</span>
               </Link>
             );
           })}
@@ -177,7 +180,7 @@ export default function Sidebar() {
                     {user.name}
                   </span>
                   <span className="text-[9px] font-semibold text-brand-300 tracking-wide mt-0.5 block leading-none capitalize">
-                    {user.role}
+                    {t(user.role)}
                   </span>
                 </div>
               </div>
@@ -185,7 +188,7 @@ export default function Sidebar() {
               {/* Progress bar */}
               <div className="space-y-1">
                 <div className="flex justify-between text-[8px] font-bold text-slate-400">
-                  <span>Progress</span>
+                  <span>{t("Progress")}</span>
                   <span>{user.xp || 0} XP</span>
                 </div>
                 <div className="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
@@ -203,7 +206,7 @@ export default function Sidebar() {
               className="w-full py-2.5 bg-slate-900 border border-slate-800/60 hover:bg-rose-955/20 hover:border-rose-500/30 hover:text-rose-455 text-slate-400 text-xs font-bold rounded-xl transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer"
             >
               <LogOut className="w-3.5 h-3.5 shrink-0" />
-              <span>Logout</span>
+              <span>{t("Logout")}</span>
             </button>
 
           </div>
@@ -211,7 +214,7 @@ export default function Sidebar() {
           <div className="space-y-3">
             <div className="p-4 rounded-2xl bg-slate-900/40 border border-slate-800/60 text-center space-y-1">
               <Sparkles className="w-5 h-5 text-blue-400 mx-auto animate-pulse" />
-              <p className="text-[10px] text-slate-400 font-medium">Join us to access volunteer statistics and achievements.</p>
+              <p className="text-[10px] text-slate-400 font-medium">{t("Join us to access volunteer statistics and achievements.")}</p>
             </div>
             <Link
               to="/login"
@@ -219,7 +222,7 @@ export default function Sidebar() {
               className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 hover:scale-[1.01]"
             >
               <LogIn className="w-4 h-4 shrink-0" />
-              <span>Portal Sign In</span>
+              <span>{t("Portal Sign In")}</span>
             </Link>
           </div>
         )}

@@ -10,12 +10,14 @@ import {
   User, CheckCircle2, Landmark, ShieldAlert 
 } from 'lucide-react';
 import { formatDate, formatCompactNumber } from '../utils/helpers';
+import { useTranslation } from '../context/TranslationContext';
 
 const CATEGORIES = ['Infrastructure', 'Roads & Safety', 'Sanitation', 'Public Space', 'Other'];
 
 export default function Home() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { t } = useTranslation();
   
   // Data states
   const [reports, setReports] = useState([]);
@@ -157,10 +159,10 @@ export default function Home() {
       
       {/* Toast Alert */}
       {toastMsg && (
-        <div className="fixed top-20 right-4 z-50 flex items-center gap-3 px-5 py-4 rounded-xl shadow-2xl border border-rose-500/30 text-rose-450 bg-rose-950/20 glass animate-slide-in">
+        <div className="fixed top-20 right-4 z-50 flex items-center gap-3 px-5 py-4 rounded-xl shadow-2xl border border-rose-500/30 text-rose-455 bg-rose-955/20 glass animate-slide-in">
           <AlertCircle className="w-5 h-5 shrink-0" />
-          <span className="text-xs font-semibold">{toastMsg}</span>
-          <Link to="/login" className="text-xs font-bold text-blue-400 hover:underline pl-2 shrink-0">Sign In</Link>
+          <span className="text-xs font-semibold">{t(toastMsg)}</span>
+          <Link to="/login" className="text-xs font-bold text-blue-400 hover:underline pl-2 shrink-0">{t("Sign In")}</Link>
         </div>
       )}
 
@@ -182,16 +184,16 @@ export default function Home() {
               className="flex-1 px-4 py-3 bg-slate-900 border border-slate-800/80 rounded-xl text-xs sm:text-sm text-slate-400 hover:text-slate-350 hover:bg-slate-800/40 text-left transition-colors flex items-center gap-2 cursor-pointer font-medium"
             >
               <Sparkles className="w-4 h-4 text-blue-400 shrink-0" />
-              <span>Got a neighborhood issue? Report it here...</span>
+              <span>{t("Got a neighborhood issue? Report it here...")}</span>
             </Link>
           </div>
 
           {/* Feed Title & Filter Controls */}
-          <div className="border-b border-slate-800/60 pb-3 space-y-4">
+          <div className="border-b border-slate-800/60 pb-3 space-y-4 text-left">
             <div className="flex justify-between items-center">
               <div>
-                <h2 className="text-lg font-bold text-white tracking-tight">Neighborhood Feed</h2>
-                <p className="text-slate-400 text-xs mt-0.5">Real-time civic postings and discussions from citizens</p>
+                <h2 className="text-lg font-bold text-white tracking-tight">{t("Neighborhood Feed")}</h2>
+                <p className="text-slate-400 text-xs mt-0.5">{t("Real-time civic postings and discussions from citizens")}</p>
               </div>
             </div>
 
@@ -199,44 +201,44 @@ export default function Home() {
             <div className="flex flex-wrap gap-3 items-center justify-between bg-slate-900/40 p-3 rounded-2xl border border-slate-800/60">
               <div className="flex flex-wrap gap-4 items-center">
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider pl-1">Status:</span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider pl-1">{t("Status:")}</span>
                   <select
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value)}
                     className="bg-slate-950 border border-slate-800/60 rounded-xl px-3 py-1.5 text-xs text-slate-350 focus:outline-none focus:border-blue-600 transition-colors cursor-pointer"
                   >
-                    <option value="all">All Statuses</option>
-                    <option value="Pending">Workers Not Assigned</option>
-                    <option value="Assigned">Workers Assigned</option>
-                    <option value="Resolved">Resolved</option>
+                    <option value="all">{t("All Statuses")}</option>
+                    <option value="Pending">{t("Workers Not Assigned")}</option>
+                    <option value="Assigned">{t("Workers Assigned")}</option>
+                    <option value="Resolved">{t("Resolved")}</option>
                   </select>
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Category:</span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t("Category:")}</span>
                   <select
                     value={categoryFilter}
                     onChange={(e) => setCategoryFilter(e.target.value)}
                     className="bg-slate-950 border border-slate-800/60 rounded-xl px-3 py-1.5 text-xs text-slate-350 focus:outline-none focus:border-blue-600 transition-colors cursor-pointer"
                   >
-                    <option value="all">All Categories</option>
+                    <option value="all">{t("All Categories")}</option>
                     {CATEGORIES.map(cat => (
-                      <option key={cat} value={cat}>{cat}</option>
+                      <option key={cat} value={cat}>{t(cat)}</option>
                     ))}
                   </select>
                 </div>
               </div>
 
               <div className="flex flex-wrap gap-2 items-center">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sort By:</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t("Sort By:")}</span>
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value)}
                   className="bg-slate-950 border border-slate-800/60 rounded-xl px-3 py-1.5 text-xs text-slate-350 focus:outline-none focus:border-blue-600 transition-colors cursor-pointer"
                 >
-                  <option value="newest">Newest Uploaded</option>
-                  <option value="oldest">Oldest Uploaded</option>
-                  <option value="urgency">Urgency / Importance</option>
+                  <option value="newest">{t("Newest Uploaded")}</option>
+                  <option value="oldest">{t("Oldest Uploaded")}</option>
+                  <option value="urgency">{t("Urgency / Importance")}</option>
                 </select>
               </div>
             </div>
@@ -250,10 +252,10 @@ export default function Home() {
               ))}
             </div>
           ) : processedReports.length === 0 ? (
-            <div className="glass p-12 text-center rounded-3xl border border-slate-800/60 animate-fade-in">
-              <MessageSquare className="w-10 h-10 text-slate-600 mx-auto mb-3" />
-              <h3 className="font-bold text-base text-white">No reports match filter criteria</h3>
-              <p className="text-slate-400 text-xs mt-1">Try adjusting your status filters or sorting options.</p>
+            <div className="glass p-12 text-center rounded-3xl border border-slate-800/60 animate-fade-in text-slate-500">
+              <MessageSquare className="w-10 h-10 text-slate-700 mx-auto mb-3" />
+              <h3 className="font-bold text-base text-white">{t("No reports match filter criteria")}</h3>
+              <p className="text-slate-400 text-xs mt-1">{t("Try adjusting your status filters or sorting options.")}</p>
             </div>
           ) : (
             <div className="space-y-6">
@@ -280,13 +282,13 @@ export default function Home() {
                             />
                             <div className="text-left leading-none">
                               <span className="block text-xs font-bold text-slate-200">{report.reporterName}</span>
-                              <span className="text-[9px] text-slate-500 font-semibold mt-0.5 block">{formatDate(report.date)}</span>
+                              <span className="text-[9px] text-slate-550 font-semibold mt-0.5 block">{formatDate(report.date)}</span>
                             </div>
                           </div>
 
                           <div className="flex items-center gap-2">
                             <span className="px-2 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-[9px] font-bold text-brand-300">
-                              {report.category}
+                              {t(report.category)}
                             </span>
                             
                             {report.severity && (
@@ -296,17 +298,17 @@ export default function Home() {
                                 report.severity === 'Medium' ? 'bg-blue-500/10 text-blue-455 border-blue-500/30' :
                                 'bg-slate-800 text-slate-405 border-slate-700'
                               }`}>
-                                {report.severity}
+                                {t(report.severity)}
                               </span>
                             )}
 
                             {report.status && (
                               <span className={`px-2 py-0.5 rounded-full text-[8px] font-extrabold uppercase border ${
-                                report.status === 'Resolved' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' :
-                                report.status === 'Assigned' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30' :
+                                report.status === 'Resolved' ? 'bg-emerald-500/10 text-emerald-450 border-emerald-500/30' :
+                                report.status === 'Assigned' ? 'bg-indigo-500/10 text-indigo-455 border-indigo-500/30' :
                                 'bg-slate-900/60 text-slate-400 border-slate-800'
                               }`}>
-                                {report.status === 'Assigned' ? 'Workers Assigned' : report.status === 'Pending' ? 'Workers Not Assigned' : report.status}
+                                {report.status === 'Assigned' ? t('Workers Assigned') : report.status === 'Pending' ? t('Workers Not Assigned') : t(report.status)}
                               </span>
                             )}
                           </div>
@@ -315,10 +317,10 @@ export default function Home() {
                         {/* Title & Description */}
                         <div className="space-y-2 text-left">
                           <h3 className="font-extrabold text-base sm:text-lg text-white leading-snug">
-                            {report.title}
+                            {t(report.title)}
                           </h3>
                           <p className="text-slate-350 text-xs sm:text-sm leading-relaxed">
-                            {report.description}
+                            {t(report.description)}
                           </p>
                         </div>
 
@@ -335,8 +337,8 @@ export default function Home() {
 
                         {/* Location Coordinate */}
                         <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-semibold text-left">
-                          <MapPin className="w-3.5 h-3.5 text-slate-500" />
-                          <span>{report.location}</span>
+                          <MapPin className="w-3.5 h-3.5 text-slate-550" />
+                          <span>{t(report.location)}</span>
                         </div>
                       </div>
 
@@ -351,12 +353,12 @@ export default function Home() {
                                 ? 'bg-blue-600/20 text-blue-400' 
                                 : 'text-slate-500 hover:text-slate-200'
                             }`}
-                            title="Upvote"
+                            title={t("Upvote")}
                           >
                             <ChevronUp className="w-4 h-4" />
                           </button>
                           <span className={`text-[10px] font-black tracking-tight min-w-[14px] text-center ${
-                            netVotes > 0 ? 'text-blue-400' : netVotes < 0 ? 'text-rose-450' : 'text-slate-400'
+                            netVotes > 0 ? 'text-blue-400' : netVotes < 0 ? 'text-rose-455' : 'text-slate-400'
                           }`}>
                             {netVotes}
                           </span>
@@ -367,7 +369,7 @@ export default function Home() {
                                 ? 'bg-rose-600/20 text-rose-455' 
                                 : 'text-slate-500 hover:text-slate-200'
                             }`}
-                            title="Downvote"
+                            title={t("Downvote")}
                           >
                             <ChevronDown className="w-4 h-4" />
                           </button>
@@ -377,16 +379,16 @@ export default function Home() {
                           onClick={() => toggleComments(report.id)}
                           className="flex items-center gap-1.5 hover:text-blue-400 transition-colors cursor-pointer"
                         >
-                          <MessageSquare className="w-4.5 h-4.5" />
-                          <span>{report.comments?.length || 0} Comments</span>
+                          <MessageSquare className="w-4.5 h-4.5 text-slate-500" />
+                          <span>{report.comments?.length || 0} {t("Comments")}</span>
                         </button>
                         
                         <button 
                           onClick={() => triggerToast("Copied link to clipboard!")}
                           className="flex items-center gap-1.5 hover:text-blue-400 transition-colors cursor-pointer"
                         >
-                          <Share2 className="w-4.5 h-4.5" />
-                          <span>Share</span>
+                          <Share2 className="w-4.5 h-4.5 text-slate-500" />
+                          <span>{t("Share")}</span>
                         </button>
                       </div>
 
@@ -397,7 +399,7 @@ export default function Home() {
                           {/* Comments List */}
                           <div className="space-y-4">
                             {report.comments?.length === 0 ? (
-                              <p className="text-xs text-slate-500 italic text-left">No comments yet. Write one below to start the discussion!</p>
+                              <p className="text-xs text-slate-500 italic text-left">{t("No comments yet. Write one below to start the discussion!")}</p>
                             ) : (
                               <div className="space-y-4">
                                 {report.comments.map((comment) => (
@@ -412,7 +414,7 @@ export default function Home() {
                                         <span className="text-slate-200">{comment.authorName}</span>
                                         <span className="text-slate-500 font-normal">{formatDate(comment.date)}</span>
                                       </div>
-                                      <p className="text-slate-350 text-[11px] leading-relaxed break-words">{comment.text}</p>
+                                      <p className="text-slate-350 text-[11px] leading-relaxed break-words">{t(comment.text)}</p>
                                     </div>
                                   </div>
                                 ))}
@@ -427,15 +429,15 @@ export default function Home() {
                           >
                             <input
                               type="text"
-                              placeholder="Write a comment..."
+                              placeholder={t("Write a comment...")}
                               value={commentInputs[report.id] || ''}
                               onChange={(e) => handleCommentInputChange(report.id, e.target.value)}
-                              className="flex-1 px-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-600 transition-colors"
+                              className="flex-1 px-4 py-2.5 bg-slate-955 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-600 transition-colors"
                             />
                             <button
                               type="submit"
                               disabled={!commentInputs[report.id]?.trim()}
-                              className="p-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 text-white disabled:text-slate-550 rounded-xl shadow-lg transition-colors cursor-pointer shrink-0"
+                              className="p-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 text-white disabled:text-slate-555 rounded-xl shadow-lg transition-colors cursor-pointer shrink-0"
                             >
                               <Send className="w-3.5 h-3.5" />
                             </button>
@@ -454,26 +456,26 @@ export default function Home() {
         </div>
 
         {/* Right Column: Widgets Sidebar (Col 4) */}
-        <div className="lg:col-span-4 space-y-6 lg:sticky lg:top-24">
+        <div className="lg:col-span-4 space-y-6 lg:sticky lg:top-24 text-left">
           
           {/* Municipality Overview Stats */}
           <div className="glass p-6 rounded-2xl border border-slate-800/60 shadow-lg space-y-4">
             <h3 className="text-xs font-bold text-white tracking-wider uppercase flex items-center gap-2 border-b border-slate-800/60 pb-3">
               <Landmark className="w-4 h-4 text-blue-400" />
-              <span>Municipal Overview</span>
+              <span>{t("Municipal Overview")}</span>
             </h3>
             
             <div className="grid grid-cols-3 gap-2 text-center">
               <div className="p-3 bg-slate-900/50 border border-slate-800 rounded-xl">
-                <span className="block text-[8px] text-slate-400 font-bold uppercase">Reported</span>
+                <span className="block text-[8px] text-slate-400 font-bold uppercase">{t("Submitted")}</span>
                 <span className="text-base font-extrabold text-white block mt-0.5">{overviewStats.total}</span>
               </div>
               <div className="p-3 bg-slate-900/50 border border-slate-800 rounded-xl">
-                <span className="block text-[8px] text-slate-400 font-bold uppercase">Pending</span>
+                <span className="block text-[8px] text-slate-400 font-bold uppercase">{t("Pending")}</span>
                 <span className="text-base font-extrabold text-white block mt-0.5">{overviewStats.pending}</span>
               </div>
               <div className="p-3 bg-slate-900/50 border border-slate-800 rounded-xl">
-                <span className="block text-[8px] text-slate-400 font-bold uppercase">Resolved</span>
+                <span className="block text-[8px] text-slate-400 font-bold uppercase">{t("Resolved")}</span>
                 <span className="text-base font-extrabold text-white block mt-0.5">{overviewStats.resolved}</span>
               </div>
             </div>
@@ -483,13 +485,13 @@ export default function Home() {
           <div className="glass p-6 rounded-2xl border border-slate-800/60 shadow-lg space-y-4">
             <h3 className="text-xs font-bold text-white tracking-wider uppercase flex items-center gap-2 border-b border-slate-800/60 pb-3">
               <Award className="w-4 h-4 text-blue-400" />
-              <span>Weekly Scoreboard</span>
+              <span>{t("Weekly Scoreboard")}</span>
             </h3>
 
             {loading ? (
               <div className="h-40 animate-pulse bg-slate-900/40 rounded-xl" />
             ) : (
-              <div className="divide-y divide-slate-800/40/40">
+              <div className="divide-y divide-slate-800/40">
                 {heroes.map((hero, index) => (
                   <div key={hero.id} className="flex items-center justify-between py-2.5 first:pt-0 last:pb-0">
                     <div className="flex items-center gap-3">
@@ -507,7 +509,7 @@ export default function Home() {
                       />
                       <div className="text-left">
                         <span className="block text-xs font-bold text-white">{hero.name}</span>
-                        <span className="text-[9px] text-brand-300 font-semibold">{hero.badge}</span>
+                        <span className="text-[9px] text-brand-300 font-semibold">{t(hero.badge)}</span>
                       </div>
                     </div>
                     <span className="text-xs font-bold text-white shrink-0">{formatCompactNumber(hero.xp)} XP</span>
@@ -521,21 +523,21 @@ export default function Home() {
           <div className="glass p-6 rounded-2xl border border-slate-800/60 shadow-lg space-y-3">
             <h3 className="text-xs font-bold text-white tracking-wider uppercase flex items-center gap-2 border-b border-slate-800/60 pb-3">
               <ShieldAlert className="w-4 h-4 text-blue-400" />
-              <span>Department Directory</span>
+              <span>{t("Department Directory")}</span>
             </h3>
 
             <div className="space-y-2 text-xs text-slate-400 text-left font-semibold">
               <div className="flex justify-between items-center py-1">
-                <span>🛣️ Roads & Safety dispatch</span>
-                <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/5 px-2 py-0.5 rounded border border-emerald-500/10">Active</span>
+                <span>🛣️ {t("Roads & Safety dispatch")}</span>
+                <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/5 px-2 py-0.5 rounded border border-emerald-500/10">{t("Active")}</span>
               </div>
               <div className="flex justify-between items-center py-1">
-                <span>🌳 Parks & Recreation</span>
-                <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/5 px-2 py-0.5 rounded border border-emerald-500/10">Active</span>
+                <span>🌳 {t("Parks & Recreation")}</span>
+                <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/5 px-2 py-0.5 rounded border border-emerald-500/10">{t("Active")}</span>
               </div>
               <div className="flex justify-between items-center py-1">
-                <span>🗑️ Sanitation Department</span>
-                <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/5 px-2 py-0.5 rounded border border-emerald-500/10">Active</span>
+                <span>🗑️ {t("Sanitation Department")}</span>
+                <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/5 px-2 py-0.5 rounded border border-emerald-500/10">{t("Active")}</span>
               </div>
             </div>
           </div>

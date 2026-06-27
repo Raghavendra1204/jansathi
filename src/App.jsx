@@ -10,21 +10,57 @@ import ReportIssue from './pages/ReportIssue';
 import OfficerDashboard from './pages/OfficerDashboard';
 import Chatbot from './components/Chatbot';
 import NotificationDrawer from './components/NotificationDrawer';
+import { TranslationProvider } from './context/TranslationContext';
 
 export default function App() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [theme, setTheme] = useState('dark');
+
+  const syncTheme = () => {
+    try {
+      const currentUser = JSON.parse(localStorage.getItem('mock_current_user') || '{}');
+      const themePreference = currentUser.preferences?.theme || 'dark';
+      
+      let activeTheme = themePreference;
+      if (themePreference === 'system') {
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        activeTheme = prefersDark ? 'dark' : 'light';
+      }
+
+      setTheme(activeTheme);
+
+      // Set class on documentElement
+      if (activeTheme === 'light') {
+        document.documentElement.classList.add('light');
+        document.documentElement.classList.remove('dark');
+      } else {
+        document.documentElement.classList.add('dark');
+        document.documentElement.classList.remove('light');
+      }
+    } catch {
+      setTheme('dark');
+      document.documentElement.classList.add('dark');
+      document.documentElement.classList.remove('light');
+    }
+  };
 
   useEffect(() => {
-    const handleOpen = () => setNotificationsOpen(true);
-    window.addEventListener('open-notifications-panel', handleOpen);
+    syncTheme();
+    window.addEventListener('mock-auth-state-change', syncTheme);
+    window.addEventListener('open-notifications-panel', () => setNotificationsOpen(true));
+    
     return () => {
-      window.removeEventListener('open-notifications-panel', handleOpen);
+      window.removeEventListener('mock-auth-state-change', syncTheme);
+      window.removeEventListener('open-notifications-panel', () => setNotificationsOpen(true));
     };
   }, []);
 
   return (
-    <Router>
-      <div className="min-h-screen bg-[#0b0f19] text-slate-100 flex flex-col md:flex-row">
+    <TranslationProvider>
+      <Router>
+      <div className={`min-h-screen flex flex-col md:flex-row transition-colors duration-300 ${
+        theme === 'light' ? 'bg-slate-50 text-slate-900' : 'bg-[#0b0f19] text-slate-100'
+      }`}>
         {/* Responsive Dashboard Sidebar */}
         <Sidebar />
 
@@ -58,7 +94,9 @@ export default function App() {
           </main>
 
           {/* Footer */}
-          <footer className="w-full border-t border-slate-900 bg-[#070b13] py-8 text-center text-xs text-slate-500 mt-auto">
+          <footer className={`w-full border-t py-8 text-center text-xs mt-auto transition-colors duration-300 ${
+            theme === 'light' ? 'bg-slate-100 border-slate-200 text-slate-550' : 'bg-[#070b13] border-slate-900 text-slate-500'
+          }`}>
             <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row justify-between items-center gap-4">
               <div>
                 &copy; {new Date().getFullYear()} Jaan Sathi Platform. All rights reserved.
@@ -73,5 +111,6 @@ export default function App() {
         </div>
       </div>
     </Router>
-  );
+  </TranslationProvider>
+);
 }

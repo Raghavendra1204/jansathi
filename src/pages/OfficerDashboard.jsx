@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { formatDate } from '../utils/helpers';
 import { addNotification } from '../services/api';
+import { useTranslation } from '../context/TranslationContext';
 
 const INITIAL_PENDING_REPORTS = [
   {
@@ -60,6 +61,7 @@ const INITIAL_PENDING_REPORTS = [
 
 export default function OfficerDashboard() {
   const { user, loading } = useAuth();
+  const { t } = useTranslation();
   
   // Sort queue by Gemini Priority Score in descending order (highest score first)
   const [pendingQueue, setPendingQueue] = useState(() => 
@@ -80,11 +82,11 @@ export default function OfficerDashboard() {
 
   if (!user || user.role !== 'officer') {
     return (
-      <div className="glass p-12 text-center rounded-2xl max-w-md mx-auto border border-rose-500/30 bg-rose-950/10 text-rose-450 mt-12 animate-fade-in">
+      <div className="glass p-12 text-center rounded-2xl max-w-md mx-auto border border-rose-500/30 bg-rose-950/10 text-rose-455 mt-12 animate-fade-in text-left">
         <AlertCircle className="w-12 h-12 text-rose-400 mx-auto mb-4" />
-        <h3 className="font-bold text-xl text-white">Officer Access Denied</h3>
+        <h3 className="font-bold text-xl text-white">{t("Officer Access Denied")}</h3>
         <p className="text-slate-400 text-sm mt-2">
-          This portal requires official municipal credentials. Please sign in as a Government Officer.
+          {t("This portal requires official municipal credentials. Please sign in as a Government Officer.")}
         </p>
       </div>
     );
@@ -137,7 +139,7 @@ export default function OfficerDashboard() {
       {successMsg && (
         <div className="fixed top-20 right-4 z-50 flex items-center gap-3 px-5 py-4 rounded-xl shadow-2xl border border-emerald-500/30 text-emerald-400 bg-emerald-950/20 glass animate-slide-in">
           <CheckCircle2 className="w-5 h-5 shrink-0" />
-          <span className="text-xs font-semibold">{successMsg}</span>
+          <span className="text-xs font-semibold">{t(successMsg)}</span>
         </div>
       )}
 
@@ -149,30 +151,30 @@ export default function OfficerDashboard() {
           <div className="p-4 bg-slate-900 border border-slate-800 text-blue-400 rounded-2xl">
             <ShieldAlert className="w-8 h-8" />
           </div>
-          <div className="space-y-1">
+          <div className="space-y-1 text-left">
             <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[10px] font-bold tracking-wider uppercase mb-1">
-              Officer Console: {user.department || 'General Administration'}
+              {t("Officer Console:")} {t(user.department || 'General Administration')}
             </div>
             <h1 className="text-2xl font-extrabold text-white tracking-tight">
-              Welcome back, Officer {user.name.split(' ')[0]}!
+              {t("Welcome back, Officer ")}{user.name.split(' ')[0]}!
             </h1>
             <p className="text-slate-400 text-xs sm:text-sm">
-              Review and approve community service submissions, verify public reports, and authorize point disbursements.
+              {t("Review and approve community service submissions, verify public reports, and authorize point disbursements.")}
             </p>
           </div>
         </div>
       </section>
 
       {/* Statistics Block */}
-      <section className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <section className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-left">
         {/* Pending Claims */}
         <div className="glass p-5 rounded-2xl border border-slate-800/60 flex items-center gap-4 hover:border-blue-500/20 transition-all">
           <div className="p-3 bg-blue-500/10 text-blue-400 rounded-xl">
             <Clock className="w-5 h-5" />
           </div>
           <div>
-            <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider">Awaiting Review</span>
-            <span className="text-xl md:text-2xl font-extrabold text-white block mt-0.5">{pendingQueue.length} claims</span>
+            <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider">{t("Awaiting Review")}</span>
+            <span className="text-xl md:text-2xl font-extrabold text-white block mt-0.5">{pendingQueue.length} {t("claims")}</span>
           </div>
         </div>
 
@@ -182,8 +184,8 @@ export default function OfficerDashboard() {
             <CheckCircle2 className="w-5 h-5" />
           </div>
           <div>
-            <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Approved</span>
-            <span className="text-xl md:text-2xl font-extrabold text-white block mt-0.5">{verifiedCount} items</span>
+            <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider">{t("Total Approved")}</span>
+            <span className="text-xl md:text-2xl font-extrabold text-white block mt-0.5">{verifiedCount} {t("items")}</span>
           </div>
         </div>
 
@@ -193,8 +195,8 @@ export default function OfficerDashboard() {
             <Users className="w-5 h-5" />
           </div>
           <div>
-            <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider">Active Volunteers</span>
-            <span className="text-xl md:text-2xl font-extrabold text-white block mt-0.5">86 Enrolled</span>
+            <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider">{t("Active Volunteers")}</span>
+            <span className="text-xl md:text-2xl font-extrabold text-white block mt-0.5">86 {t("Enrolled")}</span>
           </div>
         </div>
       </section>
@@ -202,44 +204,44 @@ export default function OfficerDashboard() {
       {/* Verification Queue Table */}
       <section className="space-y-4">
         <div className="flex justify-between items-end border-b border-slate-800/60 pb-3">
-          <div>
-            <h2 className="text-lg font-bold text-white tracking-tight">Gemini Priority Queue</h2>
+          <div className="text-left">
+            <h2 className="text-lg font-bold text-white tracking-tight">{t("Gemini Priority Queue")}</h2>
             <p className="text-slate-400 text-xs mt-0.5">
-              Claims automatically sorted by Gemini safety risk analysis (highest priority first)
+              {t("Claims automatically sorted by Gemini safety risk analysis (highest priority first)")}
             </p>
           </div>
           <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest bg-blue-500/5 px-3 py-1 rounded-lg border border-blue-500/10">
-            🤖 Gemini Auto-Sorted
+            {t("🤖 Gemini Auto-Sorted")}
           </span>
         </div>
 
         {pendingQueue.length === 0 ? (
-          <div className="glass p-12 text-center rounded-2xl border border-slate-800/60">
-            <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto mb-3" />
-            <h3 className="font-bold text-base text-white">Queue Cleared!</h3>
-            <p className="text-slate-400 text-xs mt-1">There are no pending reports left in your queue.</p>
+          <div className="glass p-12 text-center rounded-2xl border border-slate-800/60 text-slate-500">
+            <CheckCircle2 className="w-10 h-10 text-emerald-450 mx-auto mb-3 animate-bounce" />
+            <h3 className="font-bold text-base text-white">{t("Queue Cleared!")}</h3>
+            <p className="text-slate-400 text-xs mt-1">{t("There are no pending reports left in your queue.")}</p>
           </div>
         ) : (
           <div className="space-y-4">
             {pendingQueue.map((report) => (
               <div 
                 key={report.id}
-                className="glass p-6 rounded-2xl border border-slate-800/60 hover:border-slate-700/60 transition-all space-y-4"
+                className="glass p-6 rounded-2xl border border-slate-800/60 hover:border-slate-700/60 transition-all space-y-4 text-left"
               >
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] text-blue-400 font-bold tracking-wider uppercase">{report.category}</span>
+                      <span className="text-[10px] text-blue-400 font-bold tracking-wider uppercase">{t(report.category)}</span>
                       <span className={`px-2 py-0.2 rounded-full text-[8px] font-extrabold tracking-wider uppercase border ${
-                        report.severity === 'Critical' ? 'bg-rose-500/10 text-rose-450 border-rose-500/30 animate-pulse' :
-                        report.severity === 'High' ? 'bg-amber-500/10 text-amber-450 border-amber-500/30' :
-                        report.severity === 'Medium' ? 'bg-blue-500/10 text-blue-450 border-blue-500/30' :
+                        report.severity === 'Critical' ? 'bg-rose-500/10 text-rose-455 border-rose-500/30 animate-pulse' :
+                        report.severity === 'High' ? 'bg-amber-500/10 text-amber-455 border-amber-500/30' :
+                        report.severity === 'Medium' ? 'bg-blue-500/10 text-blue-455 border-blue-500/30' :
                         'bg-slate-800 text-slate-405 border-slate-700'
                       }`}>
-                        {report.severity}
+                        {t(report.severity)}
                       </span>
                     </div>
-                    <h3 className="font-bold text-base text-white mt-0.5">{report.title}</h3>
+                    <h3 className="font-bold text-base text-white mt-0.5">{t(report.title)}</h3>
                   </div>
                   
                   {/* Action Buttons */}
@@ -251,34 +253,34 @@ export default function OfficerDashboard() {
                     {processingId === report.id ? (
                       <>
                         <Loader className="w-3.5 h-3.5 animate-spin" />
-                        <span>Verifying...</span>
+                        <span>{t("Verifying...")}</span>
                       </>
                     ) : (
                       <>
                         <Check className="w-3.5 h-3.5" />
-                        <span>Verify & Disburse Points</span>
+                        <span>{t("Verify & Disburse Points")}</span>
                       </>
                     )}
                   </button>
                 </div>
 
-                <p className="text-slate-350 text-xs leading-relaxed">{report.description}</p>
+                <p className="text-slate-350 text-xs leading-relaxed">{t(report.description)}</p>
 
-                <div className="flex flex-wrap items-center justify-between gap-3 pt-3.5 border-t border-slate-800/40 text-[10px] text-slate-400 font-semibold">
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-3.5 border-t border-slate-800/40 text-[10px] text-slate-400 font-semibold font-semibold">
                   <div className="flex items-center gap-3">
                     <span className="flex items-center gap-1">
                       <MapPin className="w-3 h-3 text-slate-500" />
-                      <span>{report.location}</span>
+                      <span>{t(report.location)}</span>
                     </span>
                     <span>•</span>
-                    <span>Reported by: <span className="text-slate-200">{report.reporter}</span></span>
+                    <span>{t("Reported by:")} <span className="text-slate-200">{report.reporter}</span></span>
                     <span>•</span>
                     <span>{report.date}</span>
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
-                    <span className="text-slate-400 font-semibold">Priority: <span className="text-blue-400 font-bold">{report.priorityScore}/100</span></span>
+                    <span className="text-slate-400 font-semibold">{t("Priority:")} <span className="text-blue-400 font-bold">{report.priorityScore}/100</span></span>
                     <span className="px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-400 border border-purple-500/20 font-bold">
-                      +{report.pointsValue} XP Reward
+                      +{report.pointsValue} {t("XP Reward")}
                     </span>
                   </div>
                 </div>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Bell, CheckSquare, Sparkles, AlertCircle, ShieldAlert, Award, Inbox, Loader } from 'lucide-react';
 import { fetchNotifications, toggleNotificationRead, markAllNotificationsAsRead } from '../services/api';
+import { useTranslation } from '../context/TranslationContext';
 
 const CATEGORIES = [
   'All',
@@ -17,6 +18,7 @@ export default function NotificationDrawer({ isOpen, onClose, onCountChange }) {
   const [activeCategory, setActiveCategory] = useState('All');
   const [expandedId, setExpandedId] = useState(null);
   const [loading, setLoading] = useState(true);
+  const { t } = useTranslation();
 
   const loadNotifications = async () => {
     try {
@@ -126,17 +128,17 @@ export default function NotificationDrawer({ isOpen, onClose, onCountChange }) {
         <div className="p-5 border-b border-slate-800/60 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Bell className="w-5 h-5 text-brand-400" />
-            <h2 className="text-base font-extrabold text-white tracking-tight">Notification Center</h2>
+            <h2 className="text-base font-extrabold text-white tracking-tight">{t("Notification Center")}</h2>
             {unreadTotal > 0 && (
               <span className="bg-blue-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full shrink-0">
-                {unreadTotal} new
+                {unreadTotal} {t("new")}
               </span>
             )}
           </div>
           
           <button 
             onClick={onClose}
-            className="p-1.5 bg-slate-900 border border-slate-800 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer animate-fade-in"
+            className="p-1.5 bg-slate-900 border border-slate-800 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer animate-fade-in flex items-center justify-center"
           >
             <X className="w-4.5 h-4.5" />
           </button>
@@ -159,7 +161,7 @@ export default function NotificationDrawer({ isOpen, onClose, onCountChange }) {
                     : 'bg-slate-900/50 border border-slate-800/60 text-slate-400 hover:text-slate-200'
                 }`}
               >
-                <span>{cat === 'All' ? 'All Alerts' : cat.split(' ')[0]}</span>
+                <span>{cat === 'All' ? t('All Alerts') : t(cat)}</span>
                 {count > 0 && (
                   <span className="w-1.5 h-1.5 bg-blue-500 rounded-full inline-block shrink-0" />
                 )}
@@ -179,8 +181,8 @@ export default function NotificationDrawer({ isOpen, onClose, onCountChange }) {
           ) : filteredNotifs.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center py-20 text-slate-500">
               <Inbox className="w-8 h-8 text-slate-700 mb-3" />
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">All Clear</h3>
-              <p className="text-[10px] text-slate-550 mt-1 max-w-[200px]">No active notifications under this filter.</p>
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">{t("All Clear")}</h3>
+              <p className="text-[10px] text-slate-550 mt-1 max-w-[200px]">{t("No active notifications under this filter.")}</p>
             </div>
           ) : (
             filteredNotifs.map((notif) => (
@@ -209,25 +211,25 @@ export default function NotificationDrawer({ isOpen, onClose, onCountChange }) {
                 <div className="space-y-1.5 flex-1 min-w-0">
                   <div className="flex justify-between items-start gap-2">
                     <span className={`text-[10px] font-bold ${notif.read ? 'text-slate-500' : 'text-brand-300'}`}>
-                      {notif.category}
+                      {t(notif.category)}
                     </span>
-                    <span className="text-[9px] text-slate-500 shrink-0 font-semibold mt-0.5">{notif.time}</span>
+                    <span className="text-[9px] text-slate-550 shrink-0 font-semibold mt-0.5">{t(notif.time)}</span>
                   </div>
                   
                   <h4 className={`text-xs font-extrabold leading-snug truncate ${
                     notif.read ? 'text-slate-400' : 'text-white'
                   }`}>
-                    {notif.title}
+                    {t(notif.title)}
                   </h4>
                   
                   {/* Collapsible details drop down accordion */}
                   <div className={`transition-all duration-300 overflow-hidden ${
                     expandedId === notif.id ? 'max-h-28 mt-2.5 opacity-100' : 'max-h-0 opacity-0'
                   }`}>
-                    <p className={`text-[11px] leading-relaxed ${
+                    <p className={`text-[11px] leading-relaxed text-left ${
                       notif.read ? 'text-slate-500' : 'text-slate-350'
                     }`}>
-                      {notif.message}
+                      {t(notif.message)}
                     </p>
                   </div>
                 </div>
@@ -237,21 +239,21 @@ export default function NotificationDrawer({ isOpen, onClose, onCountChange }) {
         </div>
 
         {/* Footer Actions */}
-        <div className="p-5 border-t border-slate-800/60 bg-slate-950/20 shrink-0 flex gap-3">
+        <div className="p-5 border-t border-slate-800/60 bg-slate-955/20 shrink-0 flex gap-3">
           <button
             onClick={handleMarkAllRead}
             disabled={unreadTotal === 0}
-            className="flex-1 py-2.5 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-950 disabled:text-slate-600 border border-slate-800 disabled:border-slate-900/40 text-slate-300 hover:text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+            className="flex-1 py-2.5 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-950 disabled:text-slate-650 border border-slate-800 disabled:border-slate-900/40 text-slate-300 hover:text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
           >
             <CheckSquare className="w-3.5 h-3.5" />
-            <span>Mark All as Read</span>
+            <span>{t("Mark All as Read")}</span>
           </button>
           
           <button
             onClick={onClose}
-            className="px-5 py-2.5 border border-slate-800 hover:bg-slate-900 text-slate-400 hover:text-slate-200 rounded-xl text-xs font-bold transition-all cursor-pointer"
+            className="px-5 py-2.5 border border-slate-800 hover:bg-slate-900 text-slate-400 hover:text-slate-200 rounded-xl text-xs font-bold transition-all cursor-pointer font-semibold"
           >
-            Close
+            {t("Close")}
           </button>
         </div>
 

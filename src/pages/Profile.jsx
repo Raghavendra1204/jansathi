@@ -11,12 +11,14 @@ import { formatDate } from '../utils/helpers';
 import { 
   fetchNotifications, fetchDocuments, uploadDocument, deleteDocument, updateUserProfile, addNotification, logUserActivity 
 } from '../services/api';
+import { useTranslation } from '../context/TranslationContext';
 
 export default function Profile() {
   const { user, loading, refetchUser } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get('tab') || 'profile';
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   // Loading States
   const [saving, setSaving] = useState(false);
@@ -395,17 +397,13 @@ export default function Profile() {
                 
                 {/* Photo Simulators */}
                 <div className="flex items-center gap-2">
-                  <label className="text-[10px] font-bold text-blue-400 hover:text-blue-300 hover:underline cursor-pointer transition-colors bg-slate-900 px-2.5 py-1 rounded border border-slate-800">
-                    Upload
-                    <input type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" />
+                  <label className="text-[10px] font-bold text-blue-400 hover:text-blue-300 hover:underline cursor-pointer transition-colors bg-slate-900 px-2.5 py-1 rounded border border-slate-800">{t("Upload")}<input type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" />
                   </label>
                   {user.avatar && (
                     <button 
                       onClick={handleAvatarRemove}
                       className="text-[10px] font-bold text-rose-455 hover:text-rose-400 hover:underline cursor-pointer bg-slate-900 px-2.5 py-1 rounded border border-slate-800"
-                    >
-                      Remove
-                    </button>
+                    >{t("Remove")}</button>
                   )}
                 </div>
               </div>
@@ -416,21 +414,15 @@ export default function Profile() {
                   <div className="text-center sm:text-left">
                     <div className="flex items-center justify-center sm:justify-start gap-2 mb-2">
                       <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-brand-500/10 text-brand-300 border border-brand-500/20 text-[10px] font-bold uppercase tracking-wider">
-                        Level {level} {user.role || 'Citizen'}
+                        Level {level} {t(user.role || 'Citizen')}
                       </span>
                       {verifiedStatus === 'OC Verified' ? (
                         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold uppercase tracking-wider">
-                          <ShieldCheck className="w-3 h-3" />
-                          OC Verified
-                        </span>
+                          <ShieldCheck className="w-3 h-3" />{t("OC Verified")}</span>
                       ) : verifiedStatus === 'Pending Verification' ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold uppercase tracking-wider animate-pulse">
-                          Pending Verification
-                        </span>
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold uppercase tracking-wider animate-pulse">{t("Pending Verification")}</span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-800/40 text-slate-400 border border-slate-800 text-[10px] font-bold uppercase tracking-wider">
-                          Not Verified
-                        </span>
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-800/40 text-slate-400 border border-slate-800 text-[10px] font-bold uppercase tracking-wider">{t("Not Verified")}</span>
                       )}
                     </div>
                     
@@ -439,12 +431,11 @@ export default function Profile() {
                         <h1 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight flex items-center justify-center sm:justify-start gap-2">
                           <span>{user.name}</span>
                         </h1>
-                        <p className="text-slate-500 text-xs mt-1.5 flex items-center justify-center sm:justify-start gap-1 font-semibold uppercase tracking-wider">
-                          Unique ID: <span className="text-slate-300">{user.uniqueId || 'JS-MOCK'}</span>
+                        <p className="text-slate-500 text-xs mt-1.5 flex items-center justify-center sm:justify-start gap-1 font-semibold uppercase tracking-wider">{t("Unique ID:")}<span className="text-slate-300">{user.uniqueId || 'JS-MOCK'}</span>
                         </p>
                       </>
                     ) : (
-                      <span className="text-xs text-slate-400 italic">Editing profile details...</span>
+                      <span className="text-xs text-slate-400 italic">{t("Editing profile details...")}</span>
                     )}
                   </div>
 
@@ -466,12 +457,12 @@ export default function Profile() {
                     {editMode ? (
                       <>
                         <X className="w-3.5 h-3.5" />
-                        <span>Cancel</span>
+                        <span>{t("Cancel")}</span>
                       </>
                     ) : (
                       <>
                         <Edit3 className="w-3.5 h-3.5" />
-                        <span>Edit Credentials</span>
+                        <span>{t("Edit Credentials")}</span>
                       </>
                     )}
                   </button>
@@ -483,14 +474,14 @@ export default function Profile() {
                     <div className="flex items-center gap-2">
                       <Mail className="w-4 h-4 text-slate-500 shrink-0" />
                       <div className="min-w-0">
-                        <span className="block text-[10px] text-slate-500 font-bold uppercase tracking-wider">Email Address</span>
+                        <span className="block text-[10px] text-slate-500 font-bold uppercase tracking-wider">{t("Email Address")}</span>
                         <span className="font-semibold block text-slate-200 truncate">{user.email}</span>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
                       <Phone className="w-4 h-4 text-slate-500 shrink-0" />
                       <div className="min-w-0">
-                        <span className="block text-[10px] text-slate-500 font-bold uppercase tracking-wider">Phone Contact</span>
+                        <span className="block text-[10px] text-slate-500 font-bold uppercase tracking-wider">{t("Phone Contact")}</span>
                         <span className="font-semibold block text-slate-200 truncate">{user.phone || 'Not Configured'}</span>
                       </div>
                     </div>
@@ -516,7 +507,7 @@ export default function Profile() {
                         />
                       </div>
                       <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Email Address</label>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">{t("Email Address")}</label>
                         <input
                           type="email"
                           required
@@ -526,7 +517,7 @@ export default function Profile() {
                         />
                       </div>
                       <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Phone Contact</label>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">{t("Phone Contact")}</label>
                         <input
                           type="tel"
                           value={formData.phone}
@@ -553,7 +544,7 @@ export default function Profile() {
                       className="py-2.5 px-6 bg-gradient-to-r from-blue-600 to-indigo-650 hover:from-blue-500 hover:to-indigo-600 disabled:opacity-50 text-white rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-md cursor-pointer ml-auto"
                     >
                       {saving ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                      <span>Save Changes</span>
+                      <span>{t("Save Changes")}</span>
                     </button>
                   </form>
                 )}
@@ -617,11 +608,11 @@ export default function Profile() {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="p-3 rounded-xl bg-slate-900/30 border border-slate-800/60">
                       <span className="block text-[9px] text-slate-500 font-bold uppercase tracking-wider">Joined Groups</span>
-                      <span className="text-lg font-black text-slate-200 mt-1 block">3 Communities</span>
+                      <span className="text-sm sm:text-base font-black text-slate-200 mt-1 block">3 Communities</span>
                     </div>
                     <div className="p-3 rounded-xl bg-slate-900/30 border border-slate-800/60">
                       <span className="block text-[9px] text-slate-500 font-bold uppercase tracking-wider">Active Requests</span>
-                      <span className="text-lg font-black text-slate-200 mt-1 block">{reportsSubmitted} Issues</span>
+                      <span className="text-sm sm:text-base font-black text-slate-200 mt-1 block">{reportsSubmitted} Issues</span>
                     </div>
                   </div>
 
@@ -897,16 +888,14 @@ export default function Profile() {
 
             {/* Column 2: Documents list */}
             <div className="md:col-span-2 space-y-4">
-              <h3 className="text-xs font-black text-white uppercase tracking-wider">Uploaded Certificates ({documents.length})</h3>
+              <h3 className="text-xs font-black text-white uppercase tracking-wider"> {t("Uploaded Certificates")} ({documents.length}) </h3>
               
               {docsLoading ? (
                 <div className="flex justify-center py-10">
                   <Loader className="w-6 h-6 text-brand-500 animate-spin" />
                 </div>
               ) : documents.length === 0 ? (
-                <div className="p-8 text-center border border-dashed border-slate-800/60 rounded-xl text-slate-550 text-xs">
-                  No verification documents uploaded. Please upload a scan of your Government ID and address bill.
-                </div>
+                <div className="p-8 text-center border border-dashed border-slate-800/60 rounded-xl text-slate-550 text-xs">{t("No verification documents uploaded. Please upload a scan of your Government ID and address bill.")}</div>
               ) : (
                 <div className="space-y-3.5">
                   {documents.map((doc) => (
@@ -934,9 +923,7 @@ export default function Profile() {
                             target="_blank"
                             rel="noopener noreferrer"
                             className="px-2.5 py-1 bg-slate-900 hover:bg-slate-850 border border-slate-800 text-blue-400 hover:text-blue-300 rounded-lg text-[9px] font-black uppercase tracking-wider transition-colors cursor-pointer"
-                          >
-                            Open File
-                          </a>
+                          >{t("Open File")}</a>
                         )}
 
                         <span className={`px-2.5 py-0.5 rounded-full border text-[8px] font-black uppercase tracking-widest shrink-0 ${
@@ -969,13 +956,13 @@ export default function Profile() {
         <section className="glass rounded-3xl p-6 md:p-8 border border-slate-800/60 shadow-xl space-y-6">
           <div className="flex items-center gap-2 border-b border-slate-800/60 pb-4">
             <MessageSquare className="w-5 h-5 text-brand-400" />
-            <h2 className="text-lg font-extrabold text-white tracking-tight">Messages Inbox</h2>
+            <h2 className="text-lg font-extrabold text-white tracking-tight">{t("Messages Inbox")}</h2>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 min-h-[300px]">
             {/* Folders column */}
             <div className="md:col-span-1 border-r border-slate-800/60 pr-4 space-y-1.5 flex flex-col">
-              <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest px-2 mb-2">Mailboxes</span>
+              <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest px-2 mb-2">{t("Mailboxes")}</span>
               {['Inbox', 'Sent Mail', 'Archived', 'Spam Alerts'].map((box, idx) => (
                 <button 
                   key={idx} 
@@ -991,8 +978,8 @@ export default function Profile() {
             {/* Conversation detail list */}
             <div className="md:col-span-3 flex flex-col justify-center items-center text-slate-500 space-y-2.5">
               <MessageSquare className="w-8 h-8 text-slate-700" />
-              <h3 className="text-xs font-black text-slate-400 uppercase tracking-wider">Mailbox Empty</h3>
-              <p className="text-[10px] text-slate-500 text-center max-w-sm">No municipal correspondence messages found in your inbox database.</p>
+              <h3 className="text-xs font-black text-slate-400 uppercase tracking-wider">{t("Mailbox Empty")}</h3>
+              <p className="text-[10px] text-slate-500 text-center max-w-sm">{t("No municipal correspondence messages found in your inbox database.")}</p>
             </div>
           </div>
         </section>
@@ -1005,8 +992,8 @@ export default function Profile() {
           <div className="border-b border-slate-800/60 pb-4 flex items-center gap-2 text-left">
             <Shield className="w-5 h-5 text-brand-400" />
             <div>
-              <h2 className="text-lg font-extrabold text-white tracking-tight">Security Configurations</h2>
-              <p className="text-[10px] text-slate-550 font-bold uppercase tracking-wider">Protect and verify account access credentials</p>
+              <h2 className="text-lg font-extrabold text-white tracking-tight">{t("Security Configurations")}</h2>
+              <p className="text-[10px] text-slate-550 font-bold uppercase tracking-wider">{t("Protect and verify account access credentials")}</p>
             </div>
           </div>
 
@@ -1020,11 +1007,9 @@ export default function Profile() {
                   <div className="space-y-1 text-left">
                     <h3 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5">
                       <Smartphone className="w-4 h-4 text-blue-400" />
-                      <span>Two-Factor Authentication (2FA)</span>
+                      <span>{t("Two-Factor Authentication (2FA)")}</span>
                     </h3>
-                    <p className="text-[10px] text-slate-400 leading-relaxed pr-6">
-                      Add a secondary layer of authentication checks. Verify login attempts using generated security codes.
-                    </p>
+                    <p className="text-[10px] text-slate-400 leading-relaxed pr-6">{t("Add a secondary layer of authentication checks. Verify login attempts using generated security codes.")}</p>
                   </div>
 
                   <button 
@@ -1045,7 +1030,7 @@ export default function Profile() {
                       ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-450'
                       : 'bg-slate-900 border-slate-800/60 text-slate-400'
                   }`}>
-                    Status: {user.security?.twoFactorActive ? 'Active' : 'Inactive'}
+                    Status: {user.security?.twoFactorActive ? t("Active") : t("Inactive")}
                   </span>
                 </div>
               </div>
@@ -1054,12 +1039,12 @@ export default function Profile() {
               <div className="p-5 rounded-2xl bg-slate-900/40 border border-slate-800/60 space-y-4 text-left">
                 <h3 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5">
                   <Key className="w-4 h-4 text-blue-400" />
-                  <span>Update Password</span>
+                  <span>{t("Update Password")}</span>
                 </h3>
 
                 <form onSubmit={handlePasswordChange} className="space-y-4 text-xs">
                   <div className="space-y-1">
-                    <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Current Password</label>
+                    <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">{t("Current Password")}</label>
                     <div className="relative">
                       <input 
                         type={showPassword ? "text" : "password"}
@@ -1080,7 +1065,7 @@ export default function Profile() {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
-                      <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">New Password</label>
+                      <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">{t("New Password")}</label>
                       <input 
                         type="password"
                         required
@@ -1090,7 +1075,7 @@ export default function Profile() {
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Confirm Password</label>
+                      <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">{t("Confirm Password")}</label>
                       <input 
                         type="password"
                         required
@@ -1104,9 +1089,7 @@ export default function Profile() {
                   <button 
                     type="submit"
                     className="py-2 px-4 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-white rounded-lg text-xs font-bold transition-all shadow-md cursor-pointer ml-auto block"
-                  >
-                    Change Credentials
-                  </button>
+                  >{t("Change Credentials")}</button>
                 </form>
               </div>
 
@@ -1119,7 +1102,7 @@ export default function Profile() {
               <div className="p-5 rounded-2xl bg-slate-900/40 border border-slate-800/60 space-y-3.5 text-left">
                 <h3 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5">
                   <Smartphone className="w-4 h-4 text-blue-400" />
-                  <span>Active Device Sessions</span>
+                  <span>{t("Active Device Sessions")}</span>
                 </h3>
                 
                 <div className="divide-y divide-slate-800/40 text-xs">
@@ -1133,13 +1116,9 @@ export default function Profile() {
                       </div>
                       
                       {d.activeNow ? (
-                        <span className="px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/25 text-emerald-450 text-[8px] font-black uppercase tracking-widest shrink-0">
-                          Active Now
-                        </span>
+                        <span className="px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/25 text-emerald-450 text-[8px] font-black uppercase tracking-widest shrink-0">{t("Active Now")}</span>
                       ) : (
-                        <button className="text-[9px] font-extrabold text-rose-455 hover:underline cursor-pointer">
-                          Revoke
-                        </button>
+                        <button className="text-[9px] font-extrabold text-rose-455 hover:underline cursor-pointer">{t("Revoke")}</button>
                       )}
                     </div>
                   ))}
@@ -1150,7 +1129,7 @@ export default function Profile() {
               <div className="p-5 rounded-2xl bg-slate-900/40 border border-slate-800/60 space-y-3.5 text-left">
                 <h3 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5">
                   <Clock className="w-4 h-4 text-blue-400" />
-                  <span>Login History Audit Logs</span>
+                  <span>{t("Login History Audit Logs")}</span>
                 </h3>
 
                 <div className="divide-y divide-slate-800/40 text-[10px] space-y-0.5">
@@ -1172,7 +1151,7 @@ export default function Profile() {
 
               {/* Connected accounts */}
               <div className="p-5 rounded-2xl bg-slate-900/40 border-slate-800/60 border space-y-3 text-left">
-                <h3 className="text-xs font-black text-white uppercase tracking-wider">Linked Auth Accounts</h3>
+                <h3 className="text-xs font-black text-white uppercase tracking-wider">{t("Linked Auth Accounts")}</h3>
                 <div className="flex gap-4">
                   <div className="flex items-center gap-1.5 p-2 rounded-lg bg-slate-950 border border-slate-800/60 text-xs">
                     <Globe className="w-3.5 h-3.5 text-slate-400" />
@@ -1189,13 +1168,9 @@ export default function Profile() {
 
               {/* Destructive Delete Button */}
               <div className="p-5 border border-rose-900/30 bg-rose-955/5 rounded-2xl text-left space-y-3">
-                <h3 className="text-xs font-black text-rose-455 uppercase tracking-wider">Administrative Zone</h3>
-                <p className="text-[10px] text-slate-400 leading-relaxed">
-                  Permanently erase account information, hazard reports history, achievements badges, and volunteer records. This process is irreversible.
-                </p>
-                <button className="py-2.5 px-4 bg-rose-950/20 border border-rose-900/40 hover:bg-rose-950/40 text-rose-455 rounded-xl text-xs font-bold transition-all cursor-pointer">
-                  Delete Account Registry
-                </button>
+                <h3 className="text-xs font-black text-rose-455 uppercase tracking-wider">{t("Administrative Zone")}</h3>
+                <p className="text-[10px] text-slate-400 leading-relaxed">{t("Permanently erase account information, hazard reports history, achievements badges, and volunteer records. This process is irreversible.")}</p>
+                <button className="py-2.5 px-4 bg-rose-950/20 border border-rose-900/40 hover:bg-rose-950/40 text-rose-455 rounded-xl text-xs font-bold transition-all cursor-pointer">{t("Delete Account Registry")}</button>
               </div>
 
             </div>
@@ -1211,8 +1186,8 @@ export default function Profile() {
           <div className="border-b border-slate-800/60 pb-4 flex items-center gap-2 text-left">
             <Settings className="w-5 h-5 text-brand-400" />
             <div>
-              <h2 className="text-lg font-extrabold text-white tracking-tight">System Preferences</h2>
-              <p className="text-[10px] text-slate-550 font-bold uppercase tracking-wider">Configure theme look, translation languages, and system alert updates</p>
+              <h2 className="text-lg font-extrabold text-white tracking-tight">{t("System Preferences")}</h2>
+              <p className="text-[10px] text-slate-550 font-bold uppercase tracking-wider">{t("Configure theme look, translation languages, and system alert updates")}</p>
             </div>
           </div>
 
@@ -1224,16 +1199,18 @@ export default function Profile() {
               <div className="p-5 rounded-2xl bg-slate-900/40 border border-slate-800/60 space-y-3.5">
                 <h3 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5">
                   <Globe className="w-4 h-4 text-blue-400" />
-                  <span>Interface Localization Language</span>
+                  <span>{t("Interface Localization Language")}</span>
                 </h3>
                 <select
                   value={prefs.language}
                   onChange={(e) => handlePreferenceToggle('language', e.target.value)}
                   className="w-full bg-slate-950 border border-slate-800/60 rounded-xl px-4 py-2.5 text-xs text-slate-350 focus:outline-none focus:border-brand-500"
                 >
-                  <option value="en">English (US Default)</option>
-                  <option value="es">Español (Spanish)</option>
+                  <option value="en">English (Default)</option>
                   <option value="hi">हिन्दी (Hindi)</option>
+                  <option value="te">తెలుగు (Telugu)</option>
+                  <option value="kn">ಕನ್ನಡ (Kannada)</option>
+                  <option value="ta">தமிழ் (Tamil)</option>
                 </select>
               </div>
 
@@ -1241,7 +1218,7 @@ export default function Profile() {
               <div className="p-5 rounded-2xl bg-slate-900/40 border border-slate-800/60 space-y-3.5">
                 <h3 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5">
                   <Settings className="w-4 h-4 text-blue-400" />
-                  <span>Display Theme Palette</span>
+                  <span>{t("Display Theme Palette")}</span>
                 </h3>
                 <div className="grid grid-cols-3 gap-3">
                   {['light', 'dark', 'system'].map(mode => (
@@ -1262,15 +1239,15 @@ export default function Profile() {
 
               {/* Accessibility */}
               <div className="p-5 rounded-2xl bg-slate-900/40 border border-slate-800/60 space-y-3 text-left">
-                <h3 className="text-xs font-black text-white uppercase tracking-wider">Accessibility Controls</h3>
+                <h3 className="text-xs font-black text-white uppercase tracking-wider">{t("Accessibility Controls")}</h3>
                 <div className="space-y-2.5">
                   <label className="flex items-center gap-2 text-[11px] text-slate-400 font-semibold cursor-pointer">
                     <input type="checkbox" className="rounded bg-slate-950 border-slate-800 focus:ring-0 text-blue-650" />
-                    <span>High Contrast UI elements</span>
+                    <span>{t("High Contrast UI elements")}</span>
                   </label>
                   <label className="flex items-center gap-2 text-[11px] text-slate-400 font-semibold cursor-pointer">
                     <input type="checkbox" className="rounded bg-slate-950 border-slate-800 focus:ring-0 text-blue-650" />
-                    <span>Reduce visual graphics animations</span>
+                    <span>{t("Reduce visual graphics animations")}</span>
                   </label>
                 </div>
               </div>
@@ -1284,7 +1261,7 @@ export default function Profile() {
               <div className="p-5 rounded-2xl bg-slate-900/40 border border-slate-800/60 space-y-4">
                 <h3 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-800/60 pb-3">
                   <BellRing className="w-4 h-4 text-blue-400" />
-                  <span>Notification Preferences</span>
+                  <span>{t("Notification Preferences")}</span>
                 </h3>
                 
                 <div className="space-y-3.5">

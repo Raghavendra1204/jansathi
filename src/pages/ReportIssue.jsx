@@ -8,6 +8,7 @@ import { useAuth } from '../hooks/useAuth';
 import { analyzeReport } from '../services/gemini';
 import { createReport } from '../services/api';
 import MapSelector from '../components/MapSelector';
+import { useTranslation } from '../context/TranslationContext';
 
 const CATEGORIES = ['Infrastructure', 'Roads & Safety', 'Sanitation', 'Public Space', 'Other'];
 
@@ -15,6 +16,7 @@ export default function ReportIssue() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const fileInputRef = useRef(null);
+  const { t } = useTranslation();
 
   // Form States
   const [title, setTitle] = useState('');
@@ -144,24 +146,24 @@ export default function ReportIssue() {
           <CheckCircle className="w-12 h-12" />
         </div>
         <div className="space-y-2">
-          <h1 className="text-2xl font-extrabold text-white tracking-tight">Report Submitted!</h1>
+          <h1 className="text-2xl font-extrabold text-white tracking-tight">{t("Report Submitted!")}</h1>
           <p className="text-slate-400 text-sm">
-            Thank you! Your report has been analyzed by Gemini AI and queued for verification. A municipal officer will inspect the issue shortly.
+            {t("Thank you! Your report has been analyzed by Gemini AI and queued for verification. A municipal officer will inspect the issue shortly.")}
           </p>
         </div>
         <div className="p-4 bg-slate-900/50 border border-slate-800 rounded-2xl text-left w-full text-xs text-slate-350 space-y-1">
-          <span className="block font-bold text-white mb-1">🎫 Report Receipt Details</span>
-          <div><span className="font-bold text-slate-400">Issue:</span> {title}</div>
-          <div><span className="font-bold text-slate-400">Category:</span> {category}</div>
-          <div><span className="font-bold text-slate-400">AI Priority Score:</span> {priorityScore}/100 ({severity})</div>
-          <div><span className="font-bold text-slate-400">XP Reward:</span> +50 XP (Pending resolution)</div>
+          <span className="block font-bold text-white mb-1">{t("🎫 Report Receipt Details")}</span>
+          <div><span className="font-bold text-slate-400">{t("Issue:")}</span> {t(title)}</div>
+          <div><span className="font-bold text-slate-400">{t("Category:")}</span> {t(category)}</div>
+          <div><span className="font-bold text-slate-400">{t("AI Priority Score:")}</span> {priorityScore}/100 ({t(severity)})</div>
+          <div><span className="font-bold text-slate-400">{t("XP Reward:")}</span> +50 XP ({t("Pending resolution")})</div>
         </div>
         <button
           onClick={handleBackToDashboard}
           className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all shadow-lg hover:scale-[1.01] cursor-pointer flex items-center justify-center gap-2"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Back to Dashboard</span>
+          <span>{t("Back to Dashboard")}</span>
         </button>
       </div>
     );
@@ -171,20 +173,20 @@ export default function ReportIssue() {
     <div className="max-w-6xl mx-auto px-4 py-6 space-y-8 animate-fade-in">
       
       {/* Header */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 text-left">
         <button
           onClick={handleBackToDashboard}
           className="p-2 bg-slate-900 border border-slate-800 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
-          title="Back"
+          title={t("Back")}
         >
           <ArrowLeft className="w-4 h-4" />
         </button>
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight flex items-center gap-2">
-            <span>Report a Civic Issue</span>
+            <span>{t("Report a Civic Issue")}</span>
           </h1>
           <p className="text-slate-400 text-xs sm:text-sm mt-0.5">
-            Help improve your municipal community by reporting safety, sanitation, or infrastructure requests.
+            {t("Help improve your municipal community by reporting safety, sanitation, or infrastructure requests.")}
           </p>
         </div>
       </div>
@@ -196,15 +198,15 @@ export default function ReportIssue() {
         <form onSubmit={handleSubmit} className="lg:col-span-7 glass p-6 sm:p-8 rounded-3xl border border-slate-800/60 shadow-xl space-y-5">
           
           {/* Issue Title */}
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 text-left">
             <label htmlFor="issue-title" className="block text-xs font-bold text-slate-400 uppercase tracking-wide">
-              Short Title
+              {t("Short Title")}
             </label>
             <input
               id="issue-title"
               type="text"
               required
-              placeholder="e.g. Broken Water Main on Elm St"
+              placeholder={t("e.g. Broken Water Main on Elm St")}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               className="w-full px-4 py-3 bg-slate-900 border border-slate-800 rounded-xl text-slate-200 text-sm placeholder-slate-500 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-colors"
@@ -212,10 +214,10 @@ export default function ReportIssue() {
           </div>
 
           {/* Description (Triggers AI classification onBlur) */}
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 text-left">
             <div className="flex justify-between items-center">
               <label htmlFor="issue-desc" className="block text-xs font-bold text-slate-400 uppercase tracking-wide">
-                Detailed Description
+                {t("Detailed Description")}
               </label>
               {description.trim().length >= 10 && (
                 <button
@@ -227,12 +229,12 @@ export default function ReportIssue() {
                   {aiAnalyzing ? (
                     <>
                       <Loader className="w-3 h-3 animate-spin" />
-                      <span>AI Analyzing...</span>
+                      <span>{t("AI Analyzing...")}</span>
                     </>
                   ) : (
                     <>
                       <Sparkles className="w-3 h-3 text-blue-400 animate-pulse" />
-                      <span>Gemini Auto-Sort</span>
+                      <span>{t("Gemini Auto-Sort")}</span>
                     </>
                   )}
                 </button>
@@ -242,7 +244,7 @@ export default function ReportIssue() {
               id="issue-desc"
               required
               rows="4"
-              placeholder="Provide details of the problem. (Tip: When you finish typing, Gemini will automatically classify and priority-sort the report!)"
+              placeholder={t("Provide details of the problem. (Tip: When you finish typing, Gemini will automatically classify and priority-sort the report!)")}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               onBlur={handleAiAnalysis}
@@ -251,9 +253,9 @@ export default function ReportIssue() {
           </div>
 
           {/* Category Selector */}
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 text-left">
             <label htmlFor="issue-category" className="block text-xs font-bold text-slate-400 uppercase tracking-wide">
-              Issue Category
+              {t("Issue Category")}
             </label>
             <select
               id="issue-category"
@@ -262,22 +264,22 @@ export default function ReportIssue() {
               className="w-full px-4 py-3 bg-slate-900 border border-slate-800 rounded-xl text-slate-200 text-sm focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-colors cursor-pointer"
             >
               {CATEGORIES.map(cat => (
-                <option key={cat} value={cat}>{cat}</option>
+                <option key={cat} value={cat}>{t(cat)}</option>
               ))}
             </select>
           </div>
 
           {/* Location Selector (Text Input + Interactive Map) */}
-          <div className="space-y-3">
+          <div className="space-y-3 text-left">
             <div className="space-y-1.5">
               <label htmlFor="issue-location" className="block text-xs font-bold text-slate-400 uppercase tracking-wide">
-                Location / Intersection
+                {t("Location / Intersection")}
               </label>
               <input
                 id="issue-location"
                 type="text"
                 required
-                placeholder="e.g. Corner of Elm and 5th Ave"
+                placeholder={t("e.g. Corner of Elm and 5th Ave")}
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
                 className="w-full px-4 py-3 bg-slate-900 border border-slate-800 rounded-xl text-slate-200 text-sm placeholder-slate-500 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-colors"
@@ -292,9 +294,9 @@ export default function ReportIssue() {
           </div>
 
           {/* Image Upload Area */}
-          <div className="space-y-2">
+          <div className="space-y-2 text-left">
             <label className="block text-xs font-bold text-slate-400 uppercase tracking-wide">
-              Upload Proof Image (Optional)
+              {t("Upload Proof Image (Optional)")}
             </label>
             
             {image ? (
@@ -309,7 +311,7 @@ export default function ReportIssue() {
                     type="button"
                     onClick={removeImage}
                     className="p-2.5 bg-rose-600/90 text-white rounded-xl hover:bg-rose-500 transition-colors shadow-lg cursor-pointer"
-                    title="Remove Image"
+                    title={t("Remove Image")}
                   >
                     <Trash2 className="w-4.5 h-4.5" />
                   </button>
@@ -337,8 +339,8 @@ export default function ReportIssue() {
                 />
                 <UploadCloud className="w-10 h-10 text-slate-500" />
                 <div>
-                  <span className="block text-xs font-bold text-white">Drag & drop your photo here</span>
-                  <span className="block text-[10px] text-slate-500 mt-1">or click to browse local files</span>
+                  <span className="block text-xs font-bold text-white">{t("Drag & drop your photo here")}</span>
+                  <span className="block text-[10px] text-slate-500 mt-1">{t("or click to browse local files")}</span>
                 </div>
               </div>
             )}
@@ -350,24 +352,24 @@ export default function ReportIssue() {
             disabled={submitting}
             className="w-full py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-600/10 hover:shadow-blue-500/20 transition-all hover:scale-[1.01] cursor-pointer flex items-center justify-center gap-2"
           >
-            <span>{submitting ? 'Submitting Report...' : 'Publish Civic Report'}</span>
+            <span>{submitting ? t('Submitting Report...') : t('Publish Civic Report')}</span>
           </button>
 
         </form>
 
         {/* Live Preview Container */}
-        <div className="lg:col-span-5 space-y-4 lg:sticky lg:top-24">
+        <div className="lg:col-span-5 space-y-4 lg:sticky lg:top-24 text-left">
           <div className="flex items-center justify-between px-1">
             <div className="flex items-center gap-2">
               <Eye className="w-4 h-4 text-brand-400" />
-              <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Live Report Preview</h2>
+              <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest">{t("Live Report Preview")}</h2>
             </div>
             
             {/* AI analyzing indicator */}
             {aiAnalyzing && (
               <span className="text-[10px] text-blue-400 font-bold flex items-center gap-1 animate-pulse">
                 <Loader className="w-3 h-3 animate-spin" />
-                <span>AI Categorizing...</span>
+                <span>{t("AI Categorizing...")}</span>
               </span>
             )}
           </div>
@@ -386,11 +388,11 @@ export default function ReportIssue() {
               ) : (
                 <div className="flex flex-col items-center justify-center text-slate-600 text-center gap-1.5 p-4">
                   <Camera className="w-8 h-8" />
-                  <span className="text-[10px] font-bold uppercase tracking-wider">No Photo Provided</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wider">{t("No Photo Provided")}</span>
                 </div>
               )}
               <div className="absolute top-4 left-4 px-3 py-1 rounded-full glass border border-white/10 text-xs font-semibold text-white">
-                {category}
+                {t(category)}
               </div>
               <div className="absolute top-4 right-4 px-2.5 py-1 rounded-lg bg-blue-600 text-xs font-bold text-white shadow-md">
                 +50 XP
@@ -402,39 +404,39 @@ export default function ReportIssue() {
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-[10px] text-brand-300 font-bold tracking-wider uppercase">
-                    Organized by Municipal Dispatch
+                    {t("Organized by Municipal Dispatch")}
                   </span>
                   
                   {/* Severity Badge */}
                   <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold tracking-wider uppercase border ${
-                    severity === 'Critical' ? 'bg-rose-500/10 text-rose-400 border-rose-500/30 animate-pulse' :
-                    severity === 'High' ? 'bg-amber-500/10 text-amber-400 border-amber-500/30' :
-                    severity === 'Medium' ? 'bg-blue-500/10 text-blue-400 border-blue-500/30' :
-                    'bg-slate-800 text-slate-400 border-slate-700'
+                    severity === 'Critical' ? 'bg-rose-500/10 text-rose-455 border-rose-500/30 animate-pulse' :
+                    severity === 'High' ? 'bg-amber-500/10 text-amber-455 border-amber-500/30' :
+                    severity === 'Medium' ? 'bg-blue-500/10 text-blue-455 border-blue-500/30' :
+                    'bg-slate-800 text-slate-405 border-slate-700'
                   }`}>
-                    {severity}
+                    {t(severity)}
                   </span>
                 </div>
                 
                 <h3 className="font-bold text-base text-white truncate">
-                  {title || 'Untargeted Civic Incident'}
+                  {t(title) || t('Untargeted Civic Incident')}
                 </h3>
                 <p className="text-slate-400 text-xs line-clamp-3 leading-relaxed">
-                  {description || 'Provide details inside the description box on the left. Gemini will automatically extract the category, assess safety severity, and calculate priority scores.'}
+                  {t(description) || t('Provide details inside the description box on the left. Gemini will automatically extract the category, assess safety severity, and calculate priority scores.')}
                 </p>
               </div>
 
-              <div className="space-y-2 pt-3 border-t border-slate-800/60 text-[10px] text-slate-350 font-semibold">
+              <div className="space-y-2 pt-3 border-t border-slate-800/60 text-[10px] text-slate-350 font-semibold font-semibold">
                 <div className="flex items-center gap-2">
                   <MapPin className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                  <span className="truncate">{location || 'Pending Location details...'}</span>
+                  <span className="truncate">{t(location) || t('Pending Location details...')}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-slate-400 font-semibold">Gemini Priority Score:</span>
+                  <span className="text-slate-400 font-semibold">{t("Gemini Priority Score:")}</span>
                   <span className={`font-bold ${
-                    priorityScore >= 80 ? 'text-rose-450' : 
-                    priorityScore >= 60 ? 'text-amber-450' : 
-                    'text-blue-450'
+                    priorityScore >= 80 ? 'text-rose-455' : 
+                    priorityScore >= 60 ? 'text-amber-455' : 
+                    'text-blue-455'
                   }`}>{priorityScore}/100</span>
                 </div>
               </div>
@@ -444,9 +446,9 @@ export default function ReportIssue() {
 
           {/* AI Explanation Banner */}
           {aiSummary && (
-            <div className="p-4 rounded-2xl bg-blue-950/20 border border-blue-500/10 text-[10px] text-slate-400 leading-relaxed animate-fade-in">
-              <span className="font-bold text-blue-400 block mb-0.5">🧠 Gemini AI Assessment Summary</span>
-              {aiSummary}
+            <div className="p-4 rounded-2xl bg-blue-955/20 border border-blue-500/10 text-[10px] text-slate-400 leading-relaxed animate-fade-in">
+              <span className="font-bold text-blue-400 block mb-0.5">{t("🧠 Gemini AI Assessment Summary")}</span>
+              {t(aiSummary)}
             </div>
           )}
         </div>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, MapPin, Calendar, Clock, CheckCircle2, AlertCircle, Loader } from 'lucide-react';
 import { fetchMissions, joinMission } from '../services/api';
+import { useTranslation } from '../context/TranslationContext';
 
 const CATEGORIES = ['All', 'Environment', 'Education', 'Social Help', 'Animal Welfare'];
 
@@ -13,6 +14,7 @@ export default function Explore() {
   const [joiningId, setJoiningId] = useState(null);
   const [notification, setNotification] = useState(null);
   const [selectedMission, setSelectedMission] = useState(null);
+  const { t } = useTranslation();
 
   useEffect(() => {
     async function loadMissions() {
@@ -101,15 +103,15 @@ export default function Explore() {
           ) : (
             <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />
           )}
-          <span className="text-sm font-semibold">{notification.message}</span>
+          <span className="text-sm font-semibold">{t(notification.message)}</span>
         </div>
       )}
 
       {/* Header */}
-      <div className="space-y-2">
-        <h1 className="text-3xl md:text-4xl font-extrabold text-white tracking-tight">Active Missions</h1>
-        <p className="text-slate-400 max-w-xl">
-          Browse campaigns and events looking for volunteers. Register to contribute and earn Hero XP.
+      <div className="space-y-2 text-left">
+        <h1 className="text-3xl md:text-4xl font-extrabold text-white tracking-tight">{t("Active Missions")}</h1>
+        <p className="text-slate-400 max-w-xl text-xs sm:text-sm">
+          {t("Browse campaigns and events looking for volunteers. Register to contribute and earn Hero XP.")}
         </p>
       </div>
 
@@ -120,10 +122,10 @@ export default function Explore() {
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
             type="text"
-            placeholder="Search missions, locations, or organizers..."
+            placeholder={t("Search missions, locations, or organizers...")}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-11 pr-4 py-3 bg-slate-900/80 border border-slate-800 rounded-xl text-sm text-slate-100 placeholder-slate-400 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors"
+            className="w-full pl-11 pr-4 py-3 bg-slate-900/80 border border-slate-800 rounded-xl text-sm text-slate-105 placeholder-slate-400 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-colors"
           />
         </div>
 
@@ -133,13 +135,13 @@ export default function Explore() {
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
-              className={`px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors ${
+              className={`px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
                 selectedCategory === cat
                   ? 'bg-brand-500 text-white shadow-lg shadow-brand-500/20'
                   : 'bg-slate-900 border border-slate-800 text-slate-300 hover:bg-slate-800/60'
               }`}
             >
-              {cat}
+              {t(cat)}
             </button>
           ))}
         </div>
@@ -151,11 +153,11 @@ export default function Explore() {
           <Loader className="w-8 h-8 text-brand-500 animate-spin" />
         </div>
       ) : filteredMissions.length === 0 ? (
-        <div className="glass p-12 text-center rounded-2xl border border-slate-800/60">
-          <AlertCircle className="w-10 h-10 text-slate-500 mx-auto mb-4" />
-          <h3 className="font-bold text-lg text-white">No Missions Found</h3>
-          <p className="text-slate-400 text-sm mt-1 max-w-sm mx-auto">
-            Try adjusting your search filters or browse other volunteering categories.
+        <div className="glass p-12 text-center rounded-2xl border border-slate-800/60 text-slate-500">
+          <AlertCircle className="w-10 h-10 text-slate-700 mx-auto mb-4" />
+          <h3 className="font-bold text-lg text-white">{t("No Missions Found")}</h3>
+          <p className="text-slate-400 text-xs mt-1 max-w-sm mx-auto">
+            {t("Try adjusting your search filters or browse other volunteering categories.")}
           </p>
         </div>
       ) : (
@@ -178,7 +180,7 @@ export default function Explore() {
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />
                   <div className="absolute top-4 left-4 px-3 py-1 rounded-full glass border border-white/10 text-xs font-semibold text-white">
-                    {mission.category}
+                    {t(mission.category)}
                   </div>
                   <div className="absolute top-4 right-4 px-2.5 py-1 rounded-lg bg-brand-500/90 text-xs font-bold text-white shadow-md">
                     +{mission.xpReward} XP
@@ -192,36 +194,36 @@ export default function Explore() {
                 >
                   <div className="space-y-2 text-left">
                     <span className="text-[10px] text-brand-300 font-semibold tracking-wider uppercase">
-                      Organized by {mission.organizer}
+                      {t("Organized by")} {t(mission.organizer)}
                     </span>
                     <h3 className="font-bold text-lg text-white group-hover:text-brand-300 transition-colors">
-                      {mission.title}
+                      {t(mission.title)}
                     </h3>
                     <p className="text-slate-400 text-xs line-clamp-3 leading-relaxed">
-                      {mission.description}
+                      {t(mission.description)}
                     </p>
                   </div>
 
-                  <div className="space-y-2 pt-2 border-t border-slate-800/40 text-xs text-slate-300 text-left">
+                  <div className="space-y-2 pt-2 border-t border-slate-800/40 text-xs text-slate-300 text-left font-semibold">
                     <div className="flex items-center gap-2">
-                      <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                      <span className="truncate">{mission.location}</span>
+                      <MapPin className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                      <span className="truncate">{t(mission.location)}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <Calendar className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                       <span>{mission.date}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                      <span>{mission.time}</span>
+                      <Clock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                      <span>{t(mission.time)}</span>
                     </div>
                   </div>
 
                   {/* Spot Tracker */}
                   <div className="space-y-1">
                     <div className="flex justify-between text-xs font-semibold">
-                      <span className="text-slate-400">Volunteers Filled</span>
-                      <span className="text-brand-300">{mission.spotsFilled} / {mission.spotsTotal} spots</span>
+                      <span className="text-slate-400">{t("Volunteers Filled")}</span>
+                      <span className="text-brand-300">{mission.spotsFilled} / {mission.spotsTotal} {t("spots")}</span>
                     </div>
                     <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
                       <div
@@ -251,17 +253,17 @@ export default function Explore() {
                     {joiningId === mission.id ? (
                       <>
                         <Loader className="w-3.5 h-3.5 animate-spin" />
-                        <span>Registering...</span>
+                        <span>{t("Registering...")}</span>
                       </>
                     ) : mission.joined ? (
                       <>
                         <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>Registered</span>
+                        <span>{t("Registered")}</span>
                       </>
                     ) : isFull ? (
-                      <span>Mission Full</span>
+                      <span>{t("Mission Full")}</span>
                     ) : (
-                      <span>Join Mission</span>
+                      <span>{t("Join Mission")}</span>
                     )}
                   </button>
                 </div>
@@ -284,7 +286,7 @@ export default function Explore() {
                 className="w-full h-full object-cover"
               />
               <div className="absolute top-4 left-4 px-3 py-1 rounded-full glass border border-white/10 text-xs font-semibold text-white">
-                {selectedMission.category}
+                {t(selectedMission.category)}
               </div>
               <div className="absolute top-4 right-4 px-2.5 py-1 rounded-lg bg-brand-500 text-xs font-bold text-white shadow-md">
                 +{selectedMission.xpReward} XP
@@ -293,12 +295,10 @@ export default function Explore() {
               {/* Close Button */}
               <button
                 onClick={() => setSelectedMission(null)}
-                className="absolute top-4 right-4 p-2 bg-slate-950/80 hover:bg-slate-900 border border-slate-800 rounded-full text-slate-400 hover:text-white transition-colors cursor-pointer"
-                title="Close"
+                className="absolute top-4 right-4 p-2 bg-slate-955/85 hover:bg-slate-900 border border-slate-800 rounded-full text-slate-400 hover:text-white transition-colors cursor-pointer flex items-center justify-center"
+                title={t("Close")}
               >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <X className="w-4.5 h-4.5" />
               </button>
             </div>
 
@@ -306,37 +306,37 @@ export default function Explore() {
             <div className="p-6 space-y-5 text-left">
               <div className="space-y-2">
                 <span className="text-[10px] text-brand-300 font-bold tracking-wider uppercase">
-                  Organized by {selectedMission.organizer}
+                  {t("Organized by")} {t(selectedMission.organizer)}
                 </span>
                 <h2 className="text-xl font-extrabold text-white leading-tight">
-                  {selectedMission.title}
+                  {t(selectedMission.title)}
                 </h2>
                 
                 {/* Joined Status Badge */}
                 {selectedMission.joined && (
                   <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold uppercase tracking-wider">
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Registered / Joined</span>
+                    <span>{t("Registered / Joined")}</span>
                   </span>
                 )}
               </div>
 
               <p className="text-slate-300 text-xs leading-relaxed max-h-36 overflow-y-auto pr-2 scrollbar-thin">
-                {selectedMission.description}
+                {t(selectedMission.description)}
               </p>
 
               <div className="grid grid-cols-3 gap-2.5 pt-2 border-t border-slate-800/40 text-[10px] text-slate-355 font-semibold">
                 <div className="p-2.5 bg-slate-900/50 border border-slate-800/40 rounded-xl space-y-1">
-                  <span className="block text-slate-500 text-[8px] uppercase tracking-wider">Location</span>
-                  <span className="block text-white truncate">{selectedMission.location}</span>
+                  <span className="block text-slate-500 text-[8px] uppercase tracking-wider">{t("Location")}</span>
+                  <span className="block text-white truncate">{t(selectedMission.location)}</span>
                 </div>
                 <div className="p-2.5 bg-slate-900/50 border border-slate-800/40 rounded-xl space-y-1">
-                  <span className="block text-slate-500 text-[8px] uppercase tracking-wider">Date</span>
+                  <span className="block text-slate-500 text-[8px] uppercase tracking-wider">{t("Date")}</span>
                   <span className="block text-white">{selectedMission.date}</span>
                 </div>
                 <div className="p-2.5 bg-slate-900/50 border border-slate-800/40 rounded-xl space-y-1">
-                  <span className="block text-slate-500 text-[8px] uppercase tracking-wider">Time</span>
-                  <span className="block text-white truncate">{selectedMission.time}</span>
+                  <span className="block text-slate-500 text-[8px] uppercase tracking-wider">{t("Time")}</span>
+                  <span className="block text-white truncate">{t(selectedMission.time)}</span>
                 </div>
               </div>
 
@@ -344,8 +344,8 @@ export default function Explore() {
               <div className="space-y-4 pt-2">
                 <div className="space-y-1.5">
                   <div className="flex justify-between text-xs font-semibold">
-                    <span className="text-slate-400">Volunteers Filled</span>
-                    <span className="text-brand-300">{selectedMission.spotsFilled} / {selectedMission.spotsTotal} spots</span>
+                    <span className="text-slate-400">{t("Volunteers Filled")}</span>
+                    <span className="text-brand-300">{selectedMission.spotsFilled} / {selectedMission.spotsTotal} {t("spots")}</span>
                   </div>
                   <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
                     <div
@@ -358,9 +358,9 @@ export default function Explore() {
                 <div className="flex gap-3">
                   <button
                     onClick={() => setSelectedMission(null)}
-                    className="flex-1 py-3 border border-slate-800 hover:bg-slate-900 text-slate-355 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer text-center"
+                    className="flex-1 py-3 border border-slate-800 hover:bg-slate-900 text-slate-355 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer text-center font-semibold"
                   >
-                    Close
+                    {t("Close")}
                   </button>
 
                   <button
@@ -382,17 +382,17 @@ export default function Explore() {
                     {joiningId === selectedMission.id ? (
                       <>
                         <Loader className="w-3.5 h-3.5 animate-spin" />
-                        <span>Registering...</span>
+                        <span>{t("Registering...")}</span>
                       </>
                     ) : selectedMission.joined ? (
                       <>
                         <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>Registered</span>
+                        <span>{t("Registered")}</span>
                       </>
                     ) : selectedMission.spotsFilled >= selectedMission.spotsTotal ? (
-                      <span>Mission Full</span>
+                      <span>{t("Mission Full")}</span>
                     ) : (
-                      <span>Register for Mission</span>
+                      <span>{t("Register for Mission")}</span>
                     )}
                   </button>
                 </div>
