@@ -29,7 +29,9 @@ const MOCK_REPORTS = [
     priorityScore: 35,
     officerNote: 'Bulb replaced. Main electrical grid connector checked and verified functional.',
     laborUsed: '2 Electrician Engineers, 1 Utility Lift Vehicle',
-    imageUrl: 'https://images.unsplash.com/photo-1485088478149-6e44b2fa7f4f?auto=format&fit=crop&q=80&w=800'
+    imageUrl: 'https://images.unsplash.com/photo-1485088478149-6e44b2fa7f4f?auto=format&fit=crop&q=80&w=800',
+    x: 25,
+    y: 35
   },
   {
     id: 'rep-02',
@@ -47,7 +49,9 @@ const MOCK_REPORTS = [
     severity: 'Critical',
     priorityScore: 82,
     officerNote: 'Inspected pothole size. Confirmed traffic hazard risk. Dispatched road crew to lay temporary asphalt repair.',
-    imageUrl: 'https://images.unsplash.com/photo-1515162305285-0293e4767cc2?auto=format&fit=crop&q=80&w=800'
+    imageUrl: 'https://images.unsplash.com/photo-1515162305285-0293e4767cc2?auto=format&fit=crop&q=80&w=800',
+    x: 48,
+    y: 55
   },
   {
     id: 'rep-03',
@@ -67,7 +71,9 @@ const MOCK_REPORTS = [
     priorityScore: 20,
     officerNote: 'Dispatched sanitation waste collector. Cleared surrounding trash piles. Dumpster cleaned and sanitized.',
     laborUsed: '3 Sanitation Workers, 1 Waste Compactor Truck',
-    imageUrl: 'https://images.unsplash.com/photo-1611284446314-60a58ac0deb9?auto=format&fit=crop&q=80&w=800'
+    imageUrl: 'https://images.unsplash.com/photo-1611284446314-60a58ac0deb9?auto=format&fit=crop&q=80&w=800',
+    x: 65,
+    y: 20
   },
   {
     id: 'rep-04',
@@ -85,7 +91,9 @@ const MOCK_REPORTS = [
     severity: 'High',
     priorityScore: 65,
     officerNote: 'Initial assessment completed. Guardrail damage verified. Awaiting work-crew schedule slots.',
-    imageUrl: 'https://images.unsplash.com/photo-1584467541268-b040f83be3fd?auto=format&fit=crop&q=80&w=800'
+    imageUrl: 'https://images.unsplash.com/photo-1584467541268-b040f83be3fd?auto=format&fit=crop&q=80&w=800',
+    x: 18,
+    y: 72
   }
 ];
 
@@ -96,6 +104,8 @@ export default function CitizenDashboard() {
   const [expandedReportId, setExpandedReportId] = useState(null);
   const [statusFilter, setStatusFilter] = useState('All'); // 'All', 'Submitted', 'Pending', 'Resolved'
   const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard', 'report', 'messages', 'settings'
+  const [viewMode, setViewMode] = useState('feed'); // 'feed' or 'map'
+  const [selectedMapReport, setSelectedMapReport] = useState(null);
   const { t } = useTranslation();
 
   // Submit report modal simulation
@@ -121,7 +131,11 @@ export default function CitizenDashboard() {
       statusColor: 'bg-blue-500/10 text-blue-400 border-blue-500/30',
       assignedOfficer: 'Officer Vikram Rathore',
       estimatedTime: 'Within 72 Hours',
-      estimatedCost: 'Pending Assessment'
+      estimatedCost: 'Pending Assessment',
+      severity: 'Medium',
+      priorityScore: 40,
+      x: Math.floor(Math.random() * 60) + 20,
+      y: Math.floor(Math.random() * 60) + 20
     };
 
     setReports([newReport, ...reports]);
@@ -250,17 +264,186 @@ export default function CitizenDashboard() {
                   : `${t("Showing filtered reports:")} ${t(statusFilter)}`}
               </p>
             </div>
-            <button
-              onClick={() => navigate('/report-issue')}
-              className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md cursor-pointer hover:scale-[1.02] hidden sm:flex"
-            >
-              <PlusCircle className="w-3.5 h-3.5" />
-              <span>{t("Report Issue")}</span>
-            </button>
+            <div className="flex items-center gap-3">
+              {/* Toggle View Mode */}
+              <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800/60 shrink-0">
+                <button 
+                  type="button"
+                  onClick={() => setViewMode('feed')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    viewMode === 'feed' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {t("Feed")}
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => setViewMode('map')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    viewMode === 'map' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {t("Map")}
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => navigate('/report-issue')}
+                className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-md cursor-pointer hover:scale-[1.02] hidden sm:flex"
+              >
+                <PlusCircle className="w-3.5 h-3.5" />
+                <span>{t("Report Issue")}</span>
+              </button>
+            </div>
           </div>
 
           <div className="space-y-4">
-            {reports.filter(r => statusFilter === 'All' || r.status === statusFilter).length === 0 ? (
+            {viewMode === 'map' ? (
+              <div className="glass p-4 rounded-3xl border border-slate-800/60 relative w-full h-[450px] overflow-hidden bg-[#0a0e17] dark:bg-[#070b13] flex flex-col justify-between" onClick={() => setSelectedMapReport(null)}>
+                {/* Map Top Header bar */}
+                <div className="flex justify-between items-center z-10 bg-slate-900/80 backdrop-blur-md p-3 rounded-2xl border border-slate-800/50">
+                  <div className="text-left">
+                    <span className="text-[9px] text-brand-400 font-black uppercase tracking-widest block">{t("Jaan Sathi GIS Mapping")}</span>
+                    <span className="text-[10px] text-slate-350 font-bold block">{t("Interactive Incident Severity Hotspots")}</span>
+                  </div>
+                  
+                  {/* Map Legend */}
+                  <div className="flex items-center gap-3 text-[9px] font-bold text-slate-400">
+                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />{t("Critical")}</span>
+                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-500" />{t("High")}</span>
+                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-blue-500" />{t("Medium")}</span>
+                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-slate-500" />{t("Low")}</span>
+                  </div>
+                </div>
+
+                {/* SVG Map Canvas */}
+                <div className="absolute inset-0 z-0">
+                  <svg className="w-full h-full opacity-60 dark:opacity-40" viewBox="0 0 800 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    {/* Rivers & Waterbodies */}
+                    <path d="M-50,380 C150,390 280,310 400,280 C520,250 630,320 850,290 L850,550 L-50,550 Z" fill="#1e3a8a" opacity="0.3" />
+                    <path d="M-50,380 C150,390 280,310 400,280 C520,250 630,320 850,290" stroke="#3b82f6" strokeWidth="8" opacity="0.4" />
+                    
+                    {/* Municipal Park Area */}
+                    <rect x="500" y="80" width="220" height="140" rx="16" fill="#065f46" opacity="0.25" />
+                    <text x="610" y="160" fill="#059669" fontSize="11" fontWeight="bold" textAnchor="middle" opacity="0.6">{t("Oak Park Green Zone")}</text>
+
+                    {/* Grid Overlay Streets */}
+                    <line x1="100" y1="0" x2="100" y2="500" stroke="#475569" strokeWidth="3" opacity="0.3" />
+                    <line x1="380" y1="0" x2="380" y2="500" stroke="#475569" strokeWidth="4" opacity="0.3" />
+                    <line x1="680" y1="0" x2="680" y2="500" stroke="#475569" strokeWidth="3" opacity="0.3" />
+                    
+                    <line x1="0" y1="120" x2="800" y2="120" stroke="#475569" strokeWidth="3" opacity="0.3" />
+                    <line x1="0" y1="260" x2="800" y2="260" stroke="#475569" strokeWidth="4" opacity="0.3" />
+                    <line x1="0" y1="420" x2="800" y2="420" stroke="#475569" strokeWidth="3" opacity="0.3" />
+
+                    <line x1="220" y1="0" x2="220" y2="500" stroke="#334155" strokeWidth="1.5" opacity="0.25" />
+                    <line x1="530" y1="0" x2="530" y2="500" stroke="#334155" strokeWidth="1.5" opacity="0.25" />
+                    
+                    <line x1="0" y1="60" x2="800" y2="60" stroke="#334155" strokeWidth="1.5" opacity="0.25" />
+                    <line x1="0" y1="190" x2="800" y2="190" stroke="#334155" strokeWidth="1.5" opacity="0.25" />
+                    <line x1="0" y1="340" x2="800" y2="340" stroke="#334155" strokeWidth="1.5" opacity="0.25" />
+                  </svg>
+                </div>
+
+                {/* Active Interactive Pins Container */}
+                <div className="absolute inset-0 z-10 pointer-events-none">
+                  {reports
+                    .filter(r => statusFilter === 'All' || r.status === statusFilter)
+                    .map((report) => {
+                      const pinColor = report.severity === 'Critical' ? 'bg-rose-500 border-rose-300' :
+                                       report.severity === 'High' ? 'bg-amber-500 border-amber-300' :
+                                       report.severity === 'Medium' ? 'bg-blue-500 border-blue-300' :
+                                       'bg-slate-500 border-slate-300';
+                      
+                      const pulseColor = report.severity === 'Critical' ? 'bg-rose-500' :
+                                         report.severity === 'High' ? 'bg-amber-500' :
+                                         report.severity === 'Medium' ? 'bg-blue-500' :
+                                         'bg-slate-500';
+
+                      const xPos = report.x || 50;
+                      const yPos = report.y || 50;
+
+                      return (
+                        <button
+                          key={report.id}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedMapReport(report);
+                          }}
+                          style={{ left: `${xPos}%`, top: `${yPos}%` }}
+                          className="absolute -translate-x-1/2 -translate-y-1/2 p-2 pointer-events-auto group cursor-pointer"
+                        >
+                          <span className="relative flex h-5 w-5 items-center justify-center">
+                            <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-65 ${pulseColor}`} />
+                            <span className={`relative inline-flex rounded-full h-3.5 w-3.5 border-2 shadow-lg transition-transform group-hover:scale-125 ${pinColor}`} />
+                          </span>
+                        </button>
+                      );
+                    })}
+                </div>
+
+                {/* Bottom Info Dialog */}
+                <div className="z-10 bg-slate-950/95 border border-slate-800/80 p-4 rounded-2xl shadow-2xl backdrop-blur-md w-full md:max-w-md mx-auto text-left relative" onClick={(e) => e.stopPropagation()}>
+                  {selectedMapReport ? (
+                    <div className="space-y-2.5 animate-fade-in">
+                      <button 
+                        type="button"
+                        onClick={() => setSelectedMapReport(null)}
+                        className="absolute top-2.5 right-2.5 text-slate-550 hover:text-slate-350 cursor-pointer"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+
+                      <div className="flex justify-between items-start gap-3">
+                        <div>
+                          <span className="text-[9px] font-black text-brand-400 uppercase tracking-widest">{t(selectedMapReport.category)}</span>
+                          <h4 className="font-extrabold text-sm text-white mt-0.5">{t(selectedMapReport.title)}</h4>
+                        </div>
+                        <span className={`px-2 py-0.5 rounded-full border text-[8px] font-black uppercase ${
+                          selectedMapReport.severity === 'Critical' ? 'bg-rose-500/10 text-rose-400 border-rose-500/30' :
+                          selectedMapReport.severity === 'High' ? 'bg-amber-500/10 text-amber-400 border-amber-500/30' :
+                          selectedMapReport.severity === 'Medium' ? 'bg-blue-500/10 text-blue-400 border-blue-500/30' :
+                          'bg-slate-850 text-slate-400 border-slate-700'
+                        }`}>
+                          {t(selectedMapReport.severity || "Medium")}
+                        </span>
+                      </div>
+
+                      <p className="text-[11px] text-slate-400 line-clamp-2 leading-relaxed">{t(selectedMapReport.description)}</p>
+
+                      <div className="flex items-center justify-between text-[9px] font-bold pt-2 border-t border-slate-800/50">
+                        <span className="flex items-center gap-1 text-slate-450">
+                          <MapPin className="w-3 h-3 text-slate-550" />
+                          {t(selectedMapReport.location)}
+                        </span>
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            setExpandedReportId(selectedMapReport.id);
+                            setViewMode('feed');
+                            setTimeout(() => {
+                              const el = document.getElementById(selectedMapReport.id);
+                              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }, 100);
+                          }}
+                          className="text-blue-400 hover:text-blue-300 flex items-center gap-0.5 cursor-pointer font-extrabold uppercase tracking-wide"
+                        >
+                          {t("Open Details")} →
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-2 text-slate-500 text-xs font-semibold flex items-center justify-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-blue-500 animate-pulse" />
+                      <span>{t("Click any pulse pin on the map to inspect issue details.")}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              reports.filter(r => statusFilter === 'All' || r.status === statusFilter).length === 0 ? (
               <div className="p-12 text-center bg-slate-900/10 border border-dashed border-slate-800/40 rounded-2xl text-slate-500 space-y-2">
                 <Clock className="w-8 h-8 mx-auto text-slate-650 animate-pulse" />
                 <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">{t("No Reports Found")}</h4>
@@ -535,7 +718,7 @@ export default function CitizenDashboard() {
                   </div>
                 )}
               </div>
-            )))}
+            ))))}
           </div>
         </section>
 
