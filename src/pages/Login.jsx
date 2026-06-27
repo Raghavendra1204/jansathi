@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Landmark, User, ShieldAlert, Eye, EyeOff, AlertCircle, ChevronDown, Sparkles } from 'lucide-react';
 import { loginUser, registerUser } from '../services/auth';
@@ -7,6 +7,42 @@ import { db, isMockFirebase } from '../firebase/config';
 
 export default function Login() {
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (isMockFirebase) {
+      const mockUsers = JSON.parse(localStorage.getItem('mock_users') || '{}');
+      const raghavUid = 'mock-uid-raghav';
+      if (!mockUsers[raghavUid]) {
+        mockUsers[raghavUid] = {
+          uid: raghavUid,
+          name: 'Raghav',
+          email: 'test1@gmail.com',
+          password: 'password123',
+          role: 'citizen',
+          phone: '9876543210',
+          location: 'Bengaluru, India',
+          uniqueId: 'JS-777777',
+          verifiedStatus: 'Verified',
+          level: 3,
+          xp: 1850,
+          nextLevelXp: 2000,
+          completedMissions: 5,
+          hoursVolunteered: 12,
+          reputationScore: 85,
+          reputationLevel: 'Local Guide',
+          badges: ['First Responder', 'Eagle Eye'],
+          preferences: {
+            language: 'en',
+            theme: 'dark'
+          },
+          points: 150,
+          reportsSubmitted: 4,
+          createdAt: new Date().toISOString()
+        };
+        localStorage.setItem('mock_users', JSON.stringify(mockUsers));
+      }
+    }
+  }, []);
   
   // Auth Modes: 'signin' or 'register'
   const [authMode, setAuthMode] = useState('signin');

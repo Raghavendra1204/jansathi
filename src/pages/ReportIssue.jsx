@@ -25,6 +25,8 @@ export default function ReportIssue() {
   const [description, setDescription] = useState('');
   const [image, setImage] = useState(null); // stores blob URL
   const [imageFile, setImageFile] = useState(null);
+  const [lat, setLat] = useState(12.9716);
+  const [lng, setLng] = useState(77.5946);
   
   // AI/Gemini States
   const [aiAnalyzing, setAiAnalyzing] = useState(false);
@@ -94,7 +96,12 @@ export default function ReportIssue() {
       return;
     }
     setImageFile(file);
-    setImage(URL.createObjectURL(file)); // Generate local preview URL
+    
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setImage(reader.result); // Save persistent Base64 Data URL
+    };
+    reader.readAsDataURL(file);
   };
 
   const triggerFileSelect = () => {
@@ -114,6 +121,17 @@ export default function ReportIssue() {
     
     setSubmitting(true);
     try {
+      let finalImageUrl = image;
+
+      if (imageFile) {
+        finalImageUrl = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.onerror = () => resolve(null);
+          reader.readAsDataURL(imageFile);
+        });
+      }
+
       const reporterName = user ? user.name : 'Anonymous Volunteer';
       const reporterAvatar = user ? user.avatar : null;
       await createReport(
@@ -121,11 +139,13 @@ export default function ReportIssue() {
         category,
         location,
         description,
-        image,
+        finalImageUrl,
         reporterName,
         reporterAvatar,
         priorityScore,
-        severity
+        severity,
+        lat,
+        lng
       );
       setSubmitted(true);
     } catch (error) {
@@ -287,8 +307,13 @@ export default function ReportIssue() {
             </div>
             
             <MapSelector 
-              onLocationSelect={(address) => {
+              locationText={location}
+              onLocationSelect={(address, latitude, longitude) => {
                 setLocation(address);
+                if (latitude && longitude) {
+                  setLat(latitude);
+                  setLng(longitude);
+                }
               }} 
             />
           </div>

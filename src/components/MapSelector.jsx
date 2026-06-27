@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Loader, MapPin } from 'lucide-react';
 
-export default function MapSelector({ onLocationSelect }) {
+export default function MapSelector({ onLocationSelect, locationText }) {
   const mapRef = useRef(null);
   const leafletMap = useRef(null);
   const markerRef = useRef(null);
+  const lastGeocodedText = useRef('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [gpsFetching, setGpsFetching] = useState(false);
@@ -89,6 +90,36 @@ export default function MapSelector({ onLocationSelect }) {
       });
     }
   }, [loading, error]);
+
+  useEffect(() => {
+    if (!locationText || !leafletMap.current || !markerRef.current || !window.L) return;
+    if (locationText === lastGeocodedText.current) return;
+
+    const delayDebounce = setTimeout(async () => {
+      try {
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(locationText)}&limit=1`,
+          { headers: { 'Accept-Language': 'en' } }
+        );
+        const data = await response.json();
+        if (data && data.length > 0) {
+          const lat = parseFloat(data[0].lat);
+          const lng = parseFloat(data[0].lon);
+          
+          lastGeocodedText.current = locationText;
+          
+          leafletMap.current.setView([lat, lng], 15);
+          markerRef.current.setLatLng([lat, lng]);
+          
+          onLocationSelect(locationText, lat, lng);
+        }
+      } catch (err) {
+        console.error("Geocoding failed:", err);
+      }
+    }, 1500);
+
+    return () => clearTimeout(delayDebounce);
+  }, [locationText]);
 
   // Translate coordinates to a readable address using OSM Nominatim reverse geocoder
   const reverseGeocode = async (lat, lng) => {

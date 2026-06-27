@@ -104,7 +104,9 @@ const DEFAULT_REPORTS = [
         text: 'Dispatched to Department of Public Works. Maintenance ticket #842 created.',
         date: '2026-06-26'
       }
-    ]
+    ],
+    lat: 12.9784,
+    lng: 77.5906
   },
   {
     id: 'rep-02',
@@ -130,7 +132,9 @@ const DEFAULT_REPORTS = [
         text: 'I hit this pothole this morning! Absolute nightmare. Hope the municipality resolves it quickly.',
         date: '2026-06-24'
       }
-    ]
+    ],
+    lat: 12.9698,
+    lng: 77.6052
   },
   {
     id: 'rep-03',
@@ -148,7 +152,9 @@ const DEFAULT_REPORTS = [
     severity: 'Medium',
     status: 'Resolved',
     votedUsers: {},
-    comments: []
+    comments: [],
+    lat: 12.9562,
+    lng: 77.5750
   }
 ];
 
@@ -160,7 +166,25 @@ const getStoredReports = () => {
       localStorage.setItem('jaan_sathi_reports', JSON.stringify(DEFAULT_REPORTS));
       return DEFAULT_REPORTS;
     }
-    return JSON.parse(data);
+    
+    let reports = JSON.parse(data);
+    let updated = false;
+    
+    // Database Migration: Ensure all reports have valid coordinates
+    reports = reports.map(r => {
+      if (r.lat === undefined || r.lng === undefined) {
+        // Assign coordinates in Bangalore area
+        r.lat = 12.9716 + (Math.random() - 0.5) * 0.15;
+        r.lng = 77.5946 + (Math.random() - 0.5) * 0.15;
+        updated = true;
+      }
+      return r;
+    });
+
+    if (updated) {
+      localStorage.setItem('jaan_sathi_reports', JSON.stringify(reports));
+    }
+    return reports;
   } catch {
     return DEFAULT_REPORTS;
   }
@@ -255,7 +279,7 @@ export async function fetchReports() {
 /**
  * Creates a new report and appends it to storage.
  */
-export async function createReport(title, category, location, description, imageUrl, reporterName, reporterAvatar = null, priorityScore = 20, severity = 'Low') {
+export async function createReport(title, category, location, description, imageUrl, reporterName, reporterAvatar = null, priorityScore = 20, severity = 'Low', lat = 12.9716, lng = 77.5946) {
   await new Promise(resolve => setTimeout(resolve, 500));
   
   const reports = getStoredReports();
@@ -275,7 +299,9 @@ export async function createReport(title, category, location, description, image
     severity,
     status: 'Pending',
     votedUsers: {},
-    comments: []
+    comments: [],
+    lat,
+    lng
   };
 
   reports.unshift(newReport);
