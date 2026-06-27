@@ -28,7 +28,8 @@ const MOCK_REPORTS = [
     severity: 'Medium',
     priorityScore: 35,
     officerNote: 'Bulb replaced. Main electrical grid connector checked and verified functional.',
-    laborUsed: '2 Electrician Engineers, 1 Utility Lift Vehicle'
+    laborUsed: '2 Electrician Engineers, 1 Utility Lift Vehicle',
+    imageUrl: 'https://images.unsplash.com/photo-1485088478149-6e44b2fa7f4f?auto=format&fit=crop&q=80&w=800'
   },
   {
     id: 'rep-02',
@@ -45,7 +46,8 @@ const MOCK_REPORTS = [
     estimatedCost: '₹15,000',
     severity: 'Critical',
     priorityScore: 82,
-    officerNote: 'Inspected pothole size. Confirmed traffic hazard risk. Dispatched road crew to lay temporary asphalt repair.'
+    officerNote: 'Inspected pothole size. Confirmed traffic hazard risk. Dispatched road crew to lay temporary asphalt repair.',
+    imageUrl: 'https://images.unsplash.com/photo-1515162305285-0293e4767cc2?auto=format&fit=crop&q=80&w=800'
   },
   {
     id: 'rep-03',
@@ -64,7 +66,8 @@ const MOCK_REPORTS = [
     severity: 'Low',
     priorityScore: 20,
     officerNote: 'Dispatched sanitation waste collector. Cleared surrounding trash piles. Dumpster cleaned and sanitized.',
-    laborUsed: '3 Sanitation Workers, 1 Waste Compactor Truck'
+    laborUsed: '3 Sanitation Workers, 1 Waste Compactor Truck',
+    imageUrl: 'https://images.unsplash.com/photo-1611284446314-60a58ac0deb9?auto=format&fit=crop&q=80&w=800'
   },
   {
     id: 'rep-04',
@@ -81,7 +84,8 @@ const MOCK_REPORTS = [
     estimatedCost: '₹45,000',
     severity: 'High',
     priorityScore: 65,
-    officerNote: 'Initial assessment completed. Guardrail damage verified. Awaiting work-crew schedule slots.'
+    officerNote: 'Initial assessment completed. Guardrail damage verified. Awaiting work-crew schedule slots.',
+    imageUrl: 'https://images.unsplash.com/photo-1584467541268-b040f83be3fd?auto=format&fit=crop&q=80&w=800'
   }
 ];
 
@@ -295,6 +299,26 @@ export default function CitizenDashboard() {
                 </div>
 
                 <p className="text-slate-350 text-xs leading-relaxed">{t(report.description)}</p>
+
+                {/* Media Preview Container */}
+                {report.imageUrl && (
+                  <div className="relative rounded-2xl overflow-hidden border border-slate-800/60 h-48 w-full bg-slate-900/50 mt-2 select-none" onClick={(e) => e.stopPropagation()}>
+                    <img
+                      src={report.imageUrl}
+                      alt={report.title}
+                      className="w-full h-full object-cover hover:scale-[1.01] transition-transform duration-300 animate-fade-in"
+                    />
+                  </div>
+                )}
+                {report.videoUrl && (
+                  <div className="relative rounded-2xl overflow-hidden border border-slate-800/60 h-48 w-full bg-slate-900/50 mt-2 select-none" onClick={(e) => e.stopPropagation()}>
+                    <video
+                      src={report.videoUrl}
+                      controls
+                      className="w-full h-full object-cover animate-fade-in"
+                    />
+                  </div>
+                )}
 
                 <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-800/40 text-[10px] text-slate-400 font-semibold">
                   <div className="flex items-center gap-3">
