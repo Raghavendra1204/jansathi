@@ -156,7 +156,7 @@ export default function MapSelector({ onLocationSelect }) {
     <div className="space-y-2 relative">
       <div 
         ref={mapRef} 
-        className="h-48 w-full rounded-2xl overflow-hidden border border-slate-850 shadow-md relative"
+        className="h-48 w-full rounded-2xl overflow-hidden border border-slate-800/60 shadow-md relative"
         style={{ zIndex: 10 }}
       />
       <button

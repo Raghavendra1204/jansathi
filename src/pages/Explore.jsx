@@ -347,7 +347,7 @@ export default function Explore() {
                     <span className="text-slate-400">Volunteers Filled</span>
                     <span className="text-brand-300">{selectedMission.spotsFilled} / {selectedMission.spotsTotal} spots</span>
                   </div>
-                  <div className="w-full bg-slate-850 h-1.5 rounded-full overflow-hidden">
+                  <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
                     <div
                       className="bg-brand-500 h-full rounded-full transition-all duration-500"
                       style={{ width: `${(selectedMission.spotsFilled / selectedMission.spotsTotal) * 100}%` }}

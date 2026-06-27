@@ -196,14 +196,14 @@ export default function Home() {
             </div>
 
             {/* Interactive Filters Panel */}
-            <div className="flex flex-wrap gap-3 items-center justify-between bg-slate-900/40 p-3 rounded-2xl border border-slate-850">
+            <div className="flex flex-wrap gap-3 items-center justify-between bg-slate-900/40 p-3 rounded-2xl border border-slate-800/60">
               <div className="flex flex-wrap gap-4 items-center">
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold text-slate-450 uppercase tracking-wider pl-1">Status:</span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider pl-1">Status:</span>
                   <select
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value)}
-                    className="bg-slate-950 border border-slate-850 rounded-xl px-3 py-1.5 text-xs text-slate-350 focus:outline-none focus:border-blue-600 transition-colors cursor-pointer"
+                    className="bg-slate-950 border border-slate-800/60 rounded-xl px-3 py-1.5 text-xs text-slate-350 focus:outline-none focus:border-blue-600 transition-colors cursor-pointer"
                   >
                     <option value="all">All Statuses</option>
                     <option value="Pending">Workers Not Assigned</option>
@@ -213,11 +213,11 @@ export default function Home() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold text-slate-450 uppercase tracking-wider">Category:</span>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Category:</span>
                   <select
                     value={categoryFilter}
                     onChange={(e) => setCategoryFilter(e.target.value)}
-                    className="bg-slate-950 border border-slate-850 rounded-xl px-3 py-1.5 text-xs text-slate-350 focus:outline-none focus:border-blue-600 transition-colors cursor-pointer"
+                    className="bg-slate-950 border border-slate-800/60 rounded-xl px-3 py-1.5 text-xs text-slate-350 focus:outline-none focus:border-blue-600 transition-colors cursor-pointer"
                   >
                     <option value="all">All Categories</option>
                     {CATEGORIES.map(cat => (
@@ -228,11 +228,11 @@ export default function Home() {
               </div>
 
               <div className="flex flex-wrap gap-2 items-center">
-                <span className="text-[10px] font-bold text-slate-450 uppercase tracking-wider">Sort By:</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sort By:</span>
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value)}
-                  className="bg-slate-950 border border-slate-850 rounded-xl px-3 py-1.5 text-xs text-slate-350 focus:outline-none focus:border-blue-600 transition-colors cursor-pointer"
+                  className="bg-slate-950 border border-slate-800/60 rounded-xl px-3 py-1.5 text-xs text-slate-350 focus:outline-none focus:border-blue-600 transition-colors cursor-pointer"
                 >
                   <option value="newest">Newest Uploaded</option>
                   <option value="oldest">Oldest Uploaded</option>
@@ -324,7 +324,7 @@ export default function Home() {
 
                         {/* Post Image */}
                         {report.imageUrl && (
-                          <div className="relative rounded-2xl overflow-hidden border border-slate-850 h-56 sm:h-72 bg-slate-900/50">
+                          <div className="relative rounded-2xl overflow-hidden border border-slate-800/60 h-56 sm:h-72 bg-slate-900/50">
                             <img
                               src={report.imageUrl}
                               alt={report.title}
@@ -334,7 +334,7 @@ export default function Home() {
                         )}
 
                         {/* Location Coordinate */}
-                        <div className="flex items-center gap-1.5 text-[10px] text-slate-455 font-semibold text-left">
+                        <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-semibold text-left">
                           <MapPin className="w-3.5 h-3.5 text-slate-500" />
                           <span>{report.location}</span>
                         </div>
@@ -435,7 +435,7 @@ export default function Home() {
                             <button
                               type="submit"
                               disabled={!commentInputs[report.id]?.trim()}
-                              className="p-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-850 text-white disabled:text-slate-550 rounded-xl shadow-lg transition-colors cursor-pointer shrink-0"
+                              className="p-2.5 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 text-white disabled:text-slate-550 rounded-xl shadow-lg transition-colors cursor-pointer shrink-0"
                             >
                               <Send className="w-3.5 h-3.5" />
                             </button>
@@ -489,7 +489,7 @@ export default function Home() {
             {loading ? (
               <div className="h-40 animate-pulse bg-slate-900/40 rounded-xl" />
             ) : (
-              <div className="divide-y divide-slate-850/40">
+              <div className="divide-y divide-slate-800/40/40">
                 {heroes.map((hero, index) => (
                   <div key={hero.id} className="flex items-center justify-between py-2.5 first:pt-0 last:pb-0">
                     <div className="flex items-center gap-3">
@@ -503,7 +503,7 @@ export default function Home() {
                       <img
                         src={hero.avatar}
                         alt={hero.name}
-                        className="w-8 h-8 rounded-full object-cover ring-2 ring-slate-850"
+                        className="w-8 h-8 rounded-full object-cover ring-2 ring-slate-800"
                       />
                       <div className="text-left">
                         <span className="block text-xs font-bold text-white">{hero.name}</span>

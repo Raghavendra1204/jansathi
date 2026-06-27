@@ -34,6 +34,42 @@ export async function registerUser(email, password, name, role, department = nul
       name,
       email,
       role,
+      phone: '',
+      location: '',
+      uniqueId: `JS-${Math.floor(100000 + Math.random() * 900000)}`,
+      verifiedStatus: 'Not Verified',
+      level: 1,
+      xp: 0,
+      nextLevelXp: 1000,
+      completedMissions: 0,
+      hoursVolunteered: 0,
+      reputationScore: 10,
+      reputationLevel: 'New Recruit',
+      badges: [],
+      impactTimeline: [],
+      preferences: {
+        language: 'en',
+        theme: 'system',
+        emailNotifications: true,
+        smsNotifications: false,
+        pushNotifications: true,
+        announcements: true,
+        eventUpdates: true
+      },
+      security: {
+        twoFactorActive: false,
+        loginActivity: [
+          { id: 'l1', device: 'Chrome / Windows 10', time: new Date().toLocaleString(), status: 'Success' }
+        ],
+        activeDevices: [
+          { id: 'ad1', device: 'Chrome / Windows 10', location: 'Los Angeles, USA', activeNow: true }
+        ],
+        connectedAccounts: {
+          google: true,
+          github: false
+        }
+      },
+      lastLogin: new Date().toLocaleString(),
       points: 0,
       reportsSubmitted: 0,
       createdAt: new Date().toISOString(),
@@ -65,6 +101,42 @@ export async function registerUser(email, password, name, role, department = nul
     name,
     email,
     role,
+    phone: '',
+    location: '',
+    uniqueId: `JS-${Math.floor(100000 + Math.random() * 900000)}`,
+    verifiedStatus: 'Not Verified',
+    level: 1,
+    xp: 0,
+    nextLevelXp: 1000,
+    completedMissions: 0,
+    hoursVolunteered: 0,
+    reputationScore: 10,
+    reputationLevel: 'New Recruit',
+    badges: [],
+    impactTimeline: [],
+    preferences: {
+      language: 'en',
+      theme: 'system',
+      emailNotifications: true,
+      smsNotifications: false,
+      pushNotifications: true,
+      announcements: true,
+      eventUpdates: true
+    },
+    security: {
+      twoFactorActive: false,
+      loginActivity: [
+        { id: 'l1', device: 'Chrome / Windows 10', time: new Date().toLocaleString(), status: 'Success' }
+      ],
+      activeDevices: [
+        { id: 'ad1', device: 'Chrome / Windows 10', location: 'Los Angeles, USA', activeNow: true }
+      ],
+      connectedAccounts: {
+        google: true,
+        github: false
+      }
+    },
+    lastLogin: new Date().toLocaleString(),
     points: 0,
     reportsSubmitted: 0,
     createdAt: new Date().toISOString(),

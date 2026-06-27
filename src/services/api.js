@@ -280,6 +280,20 @@ export async function createReport(title, category, location, description, image
 
   reports.unshift(newReport);
   saveStoredReports(reports);
+
+  // Trigger Notification
+  const notifications = getStoredNotifications();
+  notifications.unshift({
+    id: `n-rep-${Date.now()}`,
+    category: 'Community Updates',
+    title: 'New Civic Report Filed',
+    message: `A new community issue "${title}" has been registered in the "${category}" category.`,
+    time: 'Just now',
+    read: false
+  });
+  saveStoredNotifications(notifications);
+  window.dispatchEvent(new Event('refresh-notifications'));
+
   return newReport;
 }
 
@@ -298,12 +312,19 @@ export async function voteReport(reportId, userId, voteType) {
   if (!report.votedUsers) report.votedUsers = {};
 
   const currentVote = report.votedUsers[userId];
+  let actionText = '';
 
   if (currentVote === voteType) {
     // Undo vote if clicking same button
     delete report.votedUsers[userId];
-    if (voteType === 'up') report.upvotes = Math.max(0, report.upvotes - 1);
-    if (voteType === 'down') report.downvotes = Math.max(0, report.downvotes - 1);
+    if (voteType === 'up') {
+      report.upvotes = Math.max(0, report.upvotes - 1);
+      actionText = 'removed their upvote from';
+    }
+    if (voteType === 'down') {
+      report.downvotes = Math.max(0, report.downvotes - 1);
+      actionText = 'removed their downvote from';
+    }
   } else {
     // Undo old opposite vote if exists
     if (currentVote === 'up') report.upvotes = Math.max(0, report.upvotes - 1);
@@ -311,12 +332,32 @@ export async function voteReport(reportId, userId, voteType) {
 
     // Apply new vote
     report.votedUsers[userId] = voteType;
-    if (voteType === 'up') report.upvotes += 1;
-    if (voteType === 'down') report.downvotes += 1;
+    if (voteType === 'up') {
+      report.upvotes += 1;
+      actionText = 'upvoted';
+    }
+    if (voteType === 'down') {
+      report.downvotes += 1;
+      actionText = 'downvoted';
+    }
   }
 
   reports[reportIndex] = report;
   saveStoredReports(reports);
+
+  // Trigger Notification
+  const notifications = getStoredNotifications();
+  notifications.unshift({
+    id: `n-vote-${Date.now()}`,
+    category: 'Community Updates',
+    title: voteType === 'up' ? 'New Post Upvote Received' : 'New Post Downvote Received',
+    message: `Your report "${report.title}" has been ${actionText} by a community member. Total votes score is now ${report.upvotes - report.downvotes}.`,
+    time: 'Just now',
+    read: false
+  });
+  saveStoredNotifications(notifications);
+  window.dispatchEvent(new Event('refresh-notifications'));
+
   return report;
 }
 
@@ -340,5 +381,263 @@ export async function addComment(reportId, commentText, authorName, authorAvatar
   report.comments.push(newComment);
   reports[reportIndex] = report;
   saveStoredReports(reports);
+
+  // Trigger Notification
+  const notifications = getStoredNotifications();
+  notifications.unshift({
+    id: `n-comm-${Date.now()}`,
+    category: 'Community Updates',
+    title: 'New Comment on Your Post',
+    message: `"${authorName}" commented on your report "${report.title}": "${commentText.substring(0, 35)}..."`,
+    time: 'Just now',
+    read: false
+  });
+  saveStoredNotifications(notifications);
+  window.dispatchEvent(new Event('refresh-notifications'));
+
   return newComment;
+}
+
+// --- NOTIFICATIONS DATABASE MOCK SERVICES ---
+const DEFAULT_NOTIFICATIONS = [
+  {
+    id: 'n-01',
+    category: 'Verification Updates',
+    title: 'Verification Status Pending',
+    message: 'Your citizen identity verification documents have been received and are under active review by municipal officers.',
+    time: '2 hours ago',
+    read: false
+  },
+  {
+    id: 'n-02',
+    category: 'Community Updates',
+    title: 'New Mission Posted Near You',
+    message: 'A new municipal volunteering activity "Green Space Clean Up" was published in your neighborhood zone.',
+    time: '5 hours ago',
+    read: false
+  },
+  {
+    id: 'n-03',
+    category: 'Security Alerts',
+    title: 'Login established',
+    message: 'A secure login session was established on Chrome browser / Windows 10 client.',
+    time: 'Yesterday',
+    read: true
+  },
+  {
+    id: 'n-04',
+    category: 'AI Recommendations',
+    title: 'Gemini Safety Assessment',
+    message: 'Gemini AI has completed assessment for your reported broken streetlight: priority score is calculated as 35 (Medium severity).',
+    time: '2 days ago',
+    read: true
+  }
+];
+
+const getStoredNotifications = () => {
+  try {
+    const data = localStorage.getItem('jaan_sathi_notifications');
+    if (!data) {
+      localStorage.setItem('jaan_sathi_notifications', JSON.stringify(DEFAULT_NOTIFICATIONS));
+      return DEFAULT_NOTIFICATIONS;
+    }
+    return JSON.parse(data);
+  } catch {
+    return DEFAULT_NOTIFICATIONS;
+  }
+};
+
+const saveStoredNotifications = (notifications) => {
+  localStorage.setItem('jaan_sathi_notifications', JSON.stringify(notifications));
+};
+
+export async function fetchNotifications() {
+  await new Promise(resolve => setTimeout(resolve, 150));
+  return getStoredNotifications();
+}
+
+export async function toggleNotificationRead(id) {
+  const notifications = getStoredNotifications();
+  const index = notifications.findIndex(n => n.id === id);
+  if (index !== -1) {
+    notifications[index].read = !notifications[index].read;
+    saveStoredNotifications(notifications);
+    return notifications[index];
+  }
+  throw new Error("Notification not found");
+}
+
+export async function markAllNotificationsAsRead() {
+  const notifications = getStoredNotifications();
+  notifications.forEach(n => { n.read = true; });
+  saveStoredNotifications(notifications);
+  return notifications;
+}
+
+export async function addNotification(category, title, message) {
+  const notifications = getStoredNotifications();
+  const newNotif = {
+    id: `n-${Date.now()}`,
+    category,
+    title,
+    message,
+    time: 'Just now',
+    read: false
+  };
+  notifications.unshift(newNotif);
+  saveStoredNotifications(notifications);
+  return newNotif;
+}
+
+// --- DOCUMENTS DATABASE MOCK SERVICES ---
+const DEFAULT_DOCUMENTS = [
+  {
+    id: 'doc-01',
+    name: 'Government_ID_Verification.pdf',
+    category: 'Identity Proof',
+    size: '1.2 MB',
+    date: '2026-06-25',
+    status: 'Verified'
+  },
+  {
+    id: 'doc-02',
+    name: 'Address_Utility_Bill.pdf',
+    category: 'Residence Verification',
+    size: '850 KB',
+    date: '2026-06-25',
+    status: 'Verified'
+  }
+];
+
+const getStoredDocuments = () => {
+  try {
+    const data = localStorage.getItem('jaan_sathi_documents');
+    if (!data) {
+      localStorage.setItem('jaan_sathi_documents', JSON.stringify(DEFAULT_DOCUMENTS));
+      return DEFAULT_DOCUMENTS;
+    }
+    return JSON.parse(data);
+  } catch {
+    return DEFAULT_DOCUMENTS;
+  }
+};
+
+const saveStoredDocuments = (docs) => {
+  localStorage.setItem('jaan_sathi_documents', JSON.stringify(docs));
+};
+
+export async function fetchDocuments() {
+  await new Promise(resolve => setTimeout(resolve, 200));
+  return getStoredDocuments();
+}
+
+export async function uploadDocument(name, category, size, fileData = '') {
+  await new Promise(resolve => setTimeout(resolve, 800));
+  const docs = getStoredDocuments();
+  const newDoc = {
+    id: `doc-${Date.now()}`,
+    name,
+    category,
+    size,
+    fileData,
+    date: new Date().toISOString().split('T')[0],
+    status: 'Pending Verification'
+  };
+  docs.unshift(newDoc);
+  saveStoredDocuments(docs);
+  return newDoc;
+}
+
+export async function deleteDocument(id) {
+  await new Promise(resolve => setTimeout(resolve, 200));
+  const docs = getStoredDocuments();
+  const filtered = docs.filter(d => d.id !== id);
+  saveStoredDocuments(filtered);
+  return { success: true };
+}
+
+// --- PROFILE & SETTINGS UPDATE SERVICES ---
+export async function updateUserProfile(uid, profileData) {
+  await new Promise(resolve => setTimeout(resolve, 500));
+  
+  // 1. Get mock database users list
+  const users = JSON.parse(localStorage.getItem('mock_users') || '{}');
+  if (!users[uid]) {
+    throw new Error("User account not found");
+  }
+
+  // 2. Merge details
+  const updatedUser = {
+    ...users[uid],
+    ...profileData
+  };
+
+  // 3. Save to global list
+  users[uid] = updatedUser;
+  localStorage.setItem('mock_users', JSON.stringify(users));
+
+  // 4. If this is the current active session user, update session object
+  const currentSession = JSON.parse(localStorage.getItem('mock_current_user') || '{}');
+  if (currentSession.uid === uid) {
+    const sessionUpdate = { ...currentSession, ...profileData };
+    delete sessionUpdate.password;
+    localStorage.setItem('mock_current_user', JSON.stringify(sessionUpdate));
+    window.dispatchEvent(new Event('mock-auth-state-change'));
+  }
+
+  return updatedUser;
+}
+
+// --- CITIZEN ACTIVITY LOGGER AND XP CALCULATOR ---
+export async function logUserActivity(uid, title, xpReward = 0) {
+  const users = JSON.parse(localStorage.getItem('mock_users') || '{}');
+  if (!users[uid]) return null;
+
+  const user = users[uid];
+  if (!user.impactTimeline) user.impactTimeline = [];
+
+  const newActivity = {
+    id: `act-${Date.now()}`,
+    title,
+    date: new Date().toISOString(),
+    xpReward
+  };
+
+  user.impactTimeline.unshift(newActivity);
+  
+  // Gamified XP Progress and Level up calculation
+  user.xp = (user.xp || 0) + xpReward;
+  const nextXp = user.nextLevelXp || 1000;
+  if (user.xp >= nextXp) {
+    user.level = (user.level || 1) + 1;
+    user.xp = user.xp - nextXp;
+    user.nextLevelXp = user.level * 1000;
+    
+    // Add level up notification
+    const notifications = JSON.parse(localStorage.getItem('jaan_sathi_notifications') || '[]');
+    notifications.unshift({
+      id: `n-lvl-${Date.now()}`,
+      category: 'System Announcements',
+      title: 'Guild Level Up!',
+      message: `Congratulations! You have reached Level ${user.level} in the Jaan Sathi Citizen Guild. Keep contributing!`,
+      time: 'Just now',
+      read: false
+    });
+    localStorage.setItem('jaan_sathi_notifications', JSON.stringify(notifications));
+  }
+
+  users[uid] = user;
+  localStorage.setItem('mock_users', JSON.stringify(users));
+
+  // Update active session
+  const currentSession = JSON.parse(localStorage.getItem('mock_current_user') || '{}');
+  if (currentSession.uid === uid) {
+    const sessionUpdate = { ...currentSession, ...user };
+    delete sessionUpdate.password;
+    localStorage.setItem('mock_current_user', JSON.stringify(sessionUpdate));
+    window.dispatchEvent(new Event('mock-auth-state-change'));
+    window.dispatchEvent(new Event('refresh-notifications'));
+  }
+
+  return user;
 }

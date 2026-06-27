@@ -424,7 +424,7 @@ export default function ReportIssue() {
                 </p>
               </div>
 
-              <div className="space-y-2 pt-3 border-t border-slate-850 text-[10px] text-slate-350 font-semibold">
+              <div className="space-y-2 pt-3 border-t border-slate-800/60 text-[10px] text-slate-350 font-semibold">
                 <div className="flex items-center gap-2">
                   <MapPin className="w-3.5 h-3.5 text-slate-500 shrink-0" />
                   <span className="truncate">{location || 'Pending Location details...'}</span>

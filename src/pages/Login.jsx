@@ -211,7 +211,7 @@ export default function Login() {
                         <span>Government Officer</span>
                       </>
                     ) : (
-                      <span className="text-slate-450 font-normal">Select portal role...</span>
+                      <span className="text-slate-400 font-normal">Select portal role...</span>
                     )}
                   </span>
                   <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform duration-300 ${roleDropdownOpen ? 'rotate-180' : ''}`} />

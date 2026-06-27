@@ -5,6 +5,7 @@ import {
   MapPin, AlertCircle, Award, Check, Loader 
 } from 'lucide-react';
 import { formatDate } from '../utils/helpers';
+import { addNotification } from '../services/api';
 
 const INITIAL_PENDING_REPORTS = [
   {
@@ -92,10 +93,35 @@ export default function OfficerDashboard() {
   const handleVerifyReport = (id, reporter, points) => {
     setProcessingId(id);
     
-    // Simulate resolving delay (updates Firestore in production)
-    setTimeout(() => {
+    // Find the report title being verified
+    const reportItem = pendingQueue.find(r => r.id === id);
+    const reportTitle = reportItem ? reportItem.title : 'Civic Hazard';
+    
+    // Simulate resolving delay (updates mock database/session)
+    setTimeout(async () => {
       setPendingQueue(prev => prev.filter(item => item.id !== id));
       setVerifiedCount(prev => prev + 1);
+      
+      try {
+        // Trigger report action verification notification
+        await addNotification(
+          'Verification Updates',
+          'Report Action Status: Approved',
+          `Your report "${reportTitle}" has been verified by the municipal dispatcher. +${points} Community Points have been awarded to your citizen ledger.`
+        );
+
+        // Trigger official mail notification
+        await addNotification(
+          'System Announcements',
+          'Official Mail: Resolution Dispatch',
+          `The Officer Desk has officially resolved report #${id.substring(0, 6)} and assigned field workers for maintenance work.`
+        );
+        
+        window.dispatchEvent(new Event('refresh-notifications'));
+      } catch (err) {
+        console.error(err);
+      }
+
       setSuccessMsg(`Report successfully verified! Disbursed +${points} Community Points to ${reporter}.`);
       setProcessingId(null);
       

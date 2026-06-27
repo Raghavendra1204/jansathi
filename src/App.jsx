@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import Home from './pages/Home';
@@ -9,8 +9,19 @@ import CitizenDashboard from './pages/CitizenDashboard';
 import ReportIssue from './pages/ReportIssue';
 import OfficerDashboard from './pages/OfficerDashboard';
 import Chatbot from './components/Chatbot';
+import NotificationDrawer from './components/NotificationDrawer';
 
 export default function App() {
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+
+  useEffect(() => {
+    const handleOpen = () => setNotificationsOpen(true);
+    window.addEventListener('open-notifications-panel', handleOpen);
+    return () => {
+      window.removeEventListener('open-notifications-panel', handleOpen);
+    };
+  }, []);
+
   return (
     <Router>
       <div className="min-h-screen bg-[#0b0f19] text-slate-100 flex flex-col md:flex-row">
@@ -19,6 +30,12 @@ export default function App() {
 
         {/* Floating AI Assistant Chatbot */}
         <Chatbot />
+
+        {/* Global Notifications Drawer Overlay */}
+        <NotificationDrawer 
+          isOpen={notificationsOpen} 
+          onClose={() => setNotificationsOpen(false)} 
+        />
 
         {/* Main Content Area */}
         <div className="flex-1 flex flex-col min-h-0 overflow-y-auto">
