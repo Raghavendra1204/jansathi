@@ -41,20 +41,26 @@ export function useAuth() {
       if (firebaseUser) {
         const userRef = doc(db, 'users', firebaseUser.uid);
         unsubSnapshot = onSnapshot(userRef, (docSnap) => {
+          let activeUser = null;
           if (docSnap.exists()) {
-            setUser({
+            activeUser = {
               uid: firebaseUser.uid,
               email: firebaseUser.email,
               ...docSnap.data()
-            });
+            };
           } else {
-            setUser({
+            activeUser = {
               uid: firebaseUser.uid,
               email: firebaseUser.email,
               role: 'citizen',
-              name: firebaseUser.displayName || 'Volunteer'
-            });
+              name: firebaseUser.displayName || 'Volunteer',
+              preferences: { language: 'en', theme: 'dark' }
+            };
           }
+
+          setUser(activeUser);
+          localStorage.setItem('mock_current_user', JSON.stringify(activeUser));
+          window.dispatchEvent(new Event('mock-auth-state-change'));
           setLoading(false);
         }, (error) => {
           console.error("Firestore snapshot error:", error);
@@ -62,6 +68,8 @@ export function useAuth() {
         });
       } else {
         setUser(null);
+        localStorage.removeItem('mock_current_user');
+        window.dispatchEvent(new Event('mock-auth-state-change'));
         setLoading(false);
       }
     });
@@ -72,6 +80,18 @@ export function useAuth() {
     };
   }, []);
 
+  const refetchUser = async () => {
+    if (isMockFirebase) {
+      try {
+        const session = localStorage.getItem('mock_current_user');
+        setUser(session ? JSON.parse(session) : null);
+      } catch {
+        // ignore
+      }
+    }
+    // In production mode, the onSnapshot listener auto-refreshes from Firestore
+  };
+
   const logout = () => {
     if (isMockFirebase) {
       localStorage.removeItem('mock_current_user');
@@ -81,5 +101,5 @@ export function useAuth() {
     signOut(auth);
   };
 
-  return { user, loading, logout };
+  return { user, loading, logout, refetchUser };
 }

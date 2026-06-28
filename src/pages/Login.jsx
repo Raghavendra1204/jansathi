@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Landmark, User, ShieldAlert, Eye, EyeOff, AlertCircle, ChevronDown, Sparkles } from 'lucide-react';
-import { loginUser, registerUser } from '../services/auth';
+import { loginUser, registerUser, loginWithGoogle } from '../services/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { db, isMockFirebase } from '../firebase/config';
 
@@ -123,8 +123,13 @@ export default function Login() {
       
       if (userDoc.exists()) {
         const profile = userDoc.data();
-        const actualRole = profile.role || 'citizen';
         
+        // Cache user details in local storage to keep state synchronized
+        const activeProfile = { uid: firebaseUser.uid, email: firebaseUser.email, ...profile };
+        localStorage.setItem('mock_current_user', JSON.stringify(activeProfile));
+        window.dispatchEvent(new Event('mock-auth-state-change'));
+
+        const actualRole = profile.role || 'citizen';
         if (actualRole !== activeRole) {
           setError(`Access Denied: The credentials entered do not belong to a ${activeRole === 'officer' ? 'Government Officer' : 'Citizen Volunteer'}.`);
           setLoading(false);
@@ -137,6 +142,16 @@ export default function Login() {
           navigate('/citizen-dashboard');
         }
       } else {
+        const defaultProfile = {
+          uid: firebaseUser.uid,
+          email: firebaseUser.email,
+          role: 'citizen',
+          name: firebaseUser.displayName || 'Volunteer',
+          preferences: { language: 'en', theme: 'dark' }
+        };
+        localStorage.setItem('mock_current_user', JSON.stringify(defaultProfile));
+        window.dispatchEvent(new Event('mock-auth-state-change'));
+
         if (activeRole !== 'citizen') {
           setError(`Access Denied: The credentials entered do not belong to a Government Officer.`);
           setLoading(false);
@@ -147,6 +162,47 @@ export default function Login() {
     } catch (err) {
       console.error(err);
       setError(err.message || 'Authentication failed. Please verify credentials.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      const firebaseUser = await loginWithGoogle();
+      
+      const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+      if (userDoc.exists()) {
+        const profile = userDoc.data();
+        
+        // Cache user details in local storage to keep state synchronized
+        const activeProfile = { uid: firebaseUser.uid, email: firebaseUser.email, ...profile };
+        localStorage.setItem('mock_current_user', JSON.stringify(activeProfile));
+        window.dispatchEvent(new Event('mock-auth-state-change'));
+
+        const actualRole = profile.role || 'citizen';
+        if (actualRole === 'officer') {
+          navigate('/officer-dashboard');
+        } else {
+          navigate('/citizen-dashboard');
+        }
+      } else {
+        const defaultProfile = {
+          uid: firebaseUser.uid,
+          email: firebaseUser.email,
+          role: 'citizen',
+          name: firebaseUser.displayName || 'Google Volunteer',
+          preferences: { language: 'en', theme: 'dark' }
+        };
+        localStorage.setItem('mock_current_user', JSON.stringify(defaultProfile));
+        window.dispatchEvent(new Event('mock-auth-state-change'));
+        navigate('/citizen-dashboard');
+      }
+    } catch (err) {
+      console.error(err);
+      setError(err.message || 'Google authentication failed.');
     } finally {
       setLoading(false);
     }
@@ -178,6 +234,11 @@ export default function Login() {
       // Create user credential and write Firestore profile
       const result = await registerUser(regEmail, regPassword, regName, regRole, deptVal);
       
+      // Cache details in local storage for real-time dashboard and sidebar syncing
+      const activeProfile = { uid: result.user.uid, email: result.user.email, ...result.profile };
+      localStorage.setItem('mock_current_user', JSON.stringify(activeProfile));
+      window.dispatchEvent(new Event('mock-auth-state-change'));
+
       // Redirect based on selected role
       if (result.profile.role === 'officer') {
         navigate('/officer-dashboard');
@@ -369,6 +430,41 @@ export default function Login() {
                       }`}
                     >
                       {loading ? <span>Authenticating...</span> : <span>Sign In as {activeRole === 'officer' ? 'Officer' : 'Citizen'}</span>}
+                    </button>
+                    
+                    {/* Divider */}
+                    <div className="relative flex py-2 items-center">
+                        <div className="flex-grow border-t border-slate-205"></div>
+                        <span className="flex-shrink mx-4 text-slate-400 text-[10px] font-bold uppercase tracking-wider">or</span>
+                        <div className="flex-grow border-t border-slate-205"></div>
+                    </div>
+
+                    {/* Google Login Button */}
+                    <button
+                      type="button"
+                      onClick={handleGoogleSignIn}
+                      disabled={loading}
+                      className="w-full py-2.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.01]"
+                    >
+                      <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                        <path
+                          fill="#4285F4"
+                          d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v3.92h6.58c-.28 1.48-1.11 2.74-2.36 3.58v2.98h3.8c2.22-2.04 3.72-5.04 3.72-8.41z"
+                        />
+                        <path
+                          fill="#34A853"
+                          d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.8-2.98c-1.05.7-2.4 1.12-4.13 1.12-3.18 0-5.88-2.15-6.84-5.04H1.28v3.08C3.26 21.3 7.37 24 12 24z"
+                        />
+                        <path
+                          fill="#FBBC05"
+                          d="M5.16 14.19c-.25-.74-.39-1.53-.39-2.35s.14-1.61.39-2.35V6.41H1.28C.46 8.05 0 9.87 0 11.84s.46 3.79 1.28 5.43l3.88-3.08z"
+                        />
+                        <path
+                          fill="#EA4335"
+                          d="M12 4.77c1.76 0 3.34.61 4.58 1.8l3.43-3.43C17.93 1.19 15.22 0 12 0 7.37 0 3.26 2.7 1.28 6.41l3.88 3.08c.96-2.89 3.66-5.04 6.84-5.04z"
+                        />
+                      </svg>
+                      <span>Sign In with Google</span>
                     </button>
                   </form>
                 )}

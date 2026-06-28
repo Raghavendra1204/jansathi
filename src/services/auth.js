@@ -2,9 +2,11 @@ import { auth, db, isMockFirebase } from '../firebase/config';
 import { 
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword, 
-  signOut 
+  signOut,
+  signInWithPopup,
+  GoogleAuthProvider
 } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
 
 // Mock storage helper: fetch all accounts
 const getMockUsers = () => {
@@ -190,4 +192,97 @@ export async function logoutUser() {
     return;
   }
   await signOut(auth);
+}
+
+/**
+ * Log in / Sign up using Google Account credentials.
+ */
+export async function loginWithGoogle() {
+  if (isMockFirebase) {
+    const dummyUser = {
+      uid: 'mock-uid-google',
+      name: 'Google User',
+      email: 'googleuser@gmail.com',
+      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150',
+      role: 'citizen',
+      xp: 150,
+      level: 1,
+      nextLevelXp: 1000,
+      preferences: {
+        language: 'en',
+        theme: 'dark'
+      }
+    };
+    
+    const users = JSON.parse(localStorage.getItem('mock_users') || '{}');
+    users[dummyUser.uid] = dummyUser;
+    localStorage.setItem('mock_users', JSON.stringify(users));
+    localStorage.setItem('mock_current_user', JSON.stringify(dummyUser));
+    window.dispatchEvent(new Event('mock-auth-state-change'));
+    return dummyUser;
+  }
+
+  try {
+    const provider = new GoogleAuthProvider();
+    const result = await signInWithPopup(auth, provider);
+    
+    const user = result.user;
+    const userRef = doc(db, 'users', user.uid);
+    const userSnap = await getDoc(userRef);
+    
+    if (!userSnap.exists()) {
+      const userProfile = {
+        name: user.displayName || 'Google Volunteer',
+        email: user.email,
+        role: 'citizen',
+        phone: user.phoneNumber || '',
+        location: '',
+        uniqueId: `JS-${Math.floor(100000 + Math.random() * 900000)}`,
+        verifiedStatus: 'Not Verified',
+        level: 1,
+        xp: 0,
+        nextLevelXp: 1000,
+        completedMissions: 0,
+        hoursVolunteered: 0,
+        reputationScore: 10,
+        reputationLevel: 'New Recruit',
+        badges: [],
+        impactTimeline: [],
+        preferences: {
+          language: 'en',
+          theme: 'dark',
+          emailNotifications: true,
+          smsNotifications: false,
+          pushNotifications: true,
+          announcements: true,
+          eventUpdates: true
+        },
+        security: {
+          twoFactorActive: false,
+          loginActivity: [
+            { id: 'l1', device: 'Chrome / Windows 10', time: new Date().toLocaleString(), status: 'Success' }
+          ],
+          activeDevices: [
+            { id: 'ad1', device: 'Chrome / Windows 10', location: 'Los Angeles, USA', activeNow: true }
+          ],
+          connectedAccounts: {
+            google: true,
+            github: false
+          }
+        },
+        lastLogin: new Date().toLocaleString(),
+        points: 0,
+        reportsSubmitted: 0,
+        createdAt: new Date().toISOString(),
+        department: null
+      };
+      
+      await setDoc(userRef, userProfile);
+    }
+    
+    return user;
+  } catch (error) {
+    console.error("Google sign in failed:", error);
+    throw error;
+  }
 }

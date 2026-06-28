@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { 
   Award, Clock, Shield, Sparkles, CheckCircle2, History, AlertCircle, Loader, 
@@ -9,9 +9,11 @@ import {
 } from 'lucide-react';
 import { formatDate } from '../utils/helpers';
 import { 
-  fetchNotifications, fetchDocuments, uploadDocument, deleteDocument, updateUserProfile, addNotification, logUserActivity 
+  fetchNotifications, fetchDocuments, uploadDocument, deleteDocument, updateUserProfile, addNotification, logUserActivity, fetchMissions, fetchReports, updateReport 
 } from '../services/api';
 import { useTranslation } from '../context/TranslationContext';
+import { isMockFirebase } from '../firebase/config';
+import SeverityBadge from '../components/SeverityBadge';
 
 export default function Profile() {
   const { user, loading, refetchUser } = useAuth();
@@ -19,6 +21,8 @@ export default function Profile() {
   const activeTab = searchParams.get('tab') || 'profile';
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const [selectedCommunity, setSelectedCommunity] = useState(null);
+  const [joiningCommId, setJoiningCommId] = useState(null);
 
   // Loading States
   const [saving, setSaving] = useState(false);
@@ -61,6 +65,19 @@ export default function Profile() {
   const [selectedUploadFile, setSelectedUploadFile] = useState(null);
   const [uploading, setUploading] = useState(false);
 
+  // My Reports States
+  const [myReports, setMyReports] = useState([]);
+  const [reportsLoading, setReportsLoading] = useState(false);
+
+  // Editing Report States
+  const [editingReport, setEditingReport] = useState(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editCategory, setEditCategory] = useState('Roads & Safety');
+  const [editLocation, setEditLocation] = useState('');
+  const [editSeverity, setEditSeverity] = useState('Low');
+  const [editDescription, setEditDescription] = useState('');
+  const [updatingReportLoading, setUpdatingReportLoading] = useState(false);
+
   // Active user details
   useEffect(() => {
     if (user) {
@@ -83,6 +100,103 @@ export default function Profile() {
       loadDocuments();
     }
   }, [activeTab]);
+
+  const [events, setEvents] = useState([]);
+  const [eventsLoading, setEventsLoading] = useState(false);
+
+  useEffect(() => {
+    if (activeTab === 'events') {
+      loadEvents();
+    }
+  }, [activeTab]);
+
+  const loadEvents = async () => {
+    setEventsLoading(true);
+    try {
+      const data = await fetchMissions();
+      setEvents(data.filter(m => m.joined));
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setEventsLoading(false);
+    }
+  };
+
+  const loadMyReports = async () => {
+    setReportsLoading(true);
+    try {
+      const allReports = await fetchReports();
+      const filtered = allReports.filter(r => r.userId === user?.uid || r.reporterName === user?.name);
+      setMyReports(filtered);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setReportsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'reports' && user) {
+      loadMyReports();
+    }
+  }, [activeTab, user]);
+
+  const handleUpdateReport = async (e) => {
+    e.preventDefault();
+    if (!editingReport) return;
+    setUpdatingReportLoading(true);
+    try {
+      await updateReport(editingReport.id, {
+        title: editTitle,
+        category: editCategory,
+        location: editLocation,
+        severity: editSeverity,
+        description: editDescription
+      });
+      
+      setMyReports(prev => prev.map(r => r.id === editingReport.id ? {
+        ...r,
+        title: editTitle,
+        category: editCategory,
+        location: editLocation,
+        severity: editSeverity,
+        description: editDescription,
+        edited: true,
+        editedAt: new Date().toISOString()
+      } : r));
+
+      setEditingReport(null);
+      triggerSuccessAlert('Post updated successfully!');
+      window.dispatchEvent(new Event('mock-auth-state-change'));
+    } catch (err) {
+      console.error(err);
+      triggerErrorAlert('Failed to update post.');
+    } finally {
+      setUpdatingReportLoading(false);
+    }
+  };
+
+  const handleJoinCommunity = async (commId, commName) => {
+    if (!user) return;
+    setJoiningCommId(commId);
+    try {
+      await logUserActivity(user.uid, `Joined Community: ${commName}`, 30, 'Community Joined', `Joined civic action group: ${commName}`, 'Completed', commId);
+      
+      const joined = user.joinedCommunities || [];
+      if (!joined.includes(commId)) {
+        joined.push(commId);
+      }
+      
+      await updateUserProfile(user.uid, { joinedCommunities: joined });
+      if (typeof refetchUser === 'function') {
+        refetchUser();
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setJoiningCommId(null);
+    }
+  };
 
   const loadDocuments = async () => {
     setDocsLoading(true);
@@ -235,7 +349,7 @@ export default function Profile() {
     }
   };
 
-  // Change Password Mock
+  // Change Password Mock / Production
   const handlePasswordChange = async (e) => {
     e.preventDefault();
     if (!passwords.oldPassword || !passwords.newPassword || !passwords.confirmPassword) {
@@ -250,13 +364,24 @@ export default function Profile() {
       triggerErrorAlert('Confirm password does not match new password.');
       return;
     }
+    setSaving(true);
     try {
-      await logUserActivity(user.uid, 'Security credentials audit: Changed profile login password', 10);
+      if (!isMockFirebase) {
+        const { auth } = await import('../firebase/config');
+        const { updatePassword } = await import('firebase/auth');
+        if (auth.currentUser) {
+          await updatePassword(auth.currentUser, passwords.newPassword);
+        }
+      }
+      await logUserActivity(user.uid, 'Security credentials audit: Changed profile login password', 10, 'Security Updated', 'User successfully changed login password');
       triggerSuccessAlert('Account credentials updated successfully.');
       setPasswords({ oldPassword: '', newPassword: '', confirmPassword: '' });
       if (refetchUser) await refetchUser();
     } catch (err) {
-      triggerErrorAlert('Failed to log security updates.');
+      console.error("Password update error:", err);
+      triggerErrorAlert(err.message || 'Failed to update credentials. Please re-authenticate and try again.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -300,8 +425,7 @@ export default function Profile() {
           ? (selectedUploadFile.size / (1024 * 1024)).toFixed(1) + ' MB'
           : (selectedUploadFile.size / 1024).toFixed(0) + ' KB';
 
-        await uploadDocument(selectedUploadFile.name, uploadFile.category, sizeStr, base64Content);
-        await logUserActivity(user.uid, `Uploaded document: ${selectedUploadFile.name} (${uploadFile.category})`, 25);
+        await uploadDocument(selectedUploadFile.name, uploadFile.category, sizeStr, base64Content, selectedUploadFile);
         
         triggerSuccessAlert(`File "${selectedUploadFile.name}" uploaded successfully.`);
         setSelectedUploadFile(null);
@@ -738,57 +862,359 @@ export default function Profile() {
         </>
       )}
 
-      {/* --- TAB VIEW 2: COMMUNITIES WORKSPACE --- */}
-      {activeTab === 'communities' && (
+      {/* --- TAB VIEW: MY SUBMISSIONS --- */}
+      {activeTab === 'reports' && (
         <section className="glass rounded-3xl p-6 md:p-8 border border-slate-800/60 shadow-xl space-y-6">
           <div className="flex items-center gap-2 border-b border-slate-800/60 pb-4">
-            <Users className="w-5 h-5 text-brand-400" />
-            <h2 className="text-lg font-extrabold text-white tracking-tight">Communities Directory</h2>
+            <FileText className="w-5 h-5 text-brand-400" />
+            <h2 className="text-lg font-extrabold text-white tracking-tight">{t("My Submissions")}</h2>
           </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {[
-              { id: 'c1', name: 'Downtown Infrastructure Hub', count: '142 members', category: 'Infrastructure', desc: 'Working with municipal engineers to fix roads, signposts, and public buildings.' },
-              { id: 'c2', name: 'Neighborhood Watch Council', count: '94 members', category: 'Roads & Safety', desc: 'Citizen patrol and safety hazards identification for local police dispatchers.' },
-              { id: 'c3', name: 'Sanitation Eco Volunteers', count: '180 members', category: 'Sanitation', desc: 'Organizing weekend trash cleanups and public trashcan distribution.' }
-            ].map(group => (
-              <div key={group.id} className="p-5 rounded-2xl bg-slate-900/40 border border-slate-800/60 shadow-md flex flex-col justify-between hover:border-slate-800 transition-all">
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="px-2.5 py-0.5 rounded-full bg-brand-500/10 text-brand-350 border border-brand-500/20 text-[9px] font-black uppercase tracking-wider">{group.category}</span>
-                    <span className="text-[10px] text-slate-500 font-bold">{group.count}</span>
-                  </div>
-                  <h3 className="text-sm font-extrabold text-white leading-snug">{group.name}</h3>
-                  <p className="text-[11px] text-slate-400 leading-relaxed">{group.desc}</p>
-                </div>
-                <button className="w-full mt-5 py-2 bg-slate-800 border border-slate-800 hover:bg-brand-500 hover:border-brand-600 hover:text-white text-slate-300 rounded-xl text-xs font-bold transition-all cursor-pointer">
-                  Joined Municipal Hub
-                </button>
+
+          <div className="space-y-4 text-left">
+            {reportsLoading ? (
+              <div className="flex justify-center items-center py-12">
+                <Loader className="w-6 h-6 text-brand-500 animate-spin" />
               </div>
-            ))}
+            ) : myReports.length === 0 ? (
+              <div className="text-center py-12 bg-slate-950/20 border border-slate-850 rounded-2xl space-y-2">
+                <FileText className="w-8 h-8 text-slate-650 mx-auto" />
+                <h3 className="text-sm font-bold text-slate-300">{t("No Reports Found")}</h3>
+                <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                  {t("You haven't submitted any hazard reports yet. Help the community by submitting your first report!")}
+                </p>
+                <Link to="/report-issue" className="mt-3 inline-block px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all shadow-md">
+                  {t("Report An Issue")}
+                </Link>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {myReports.map((report) => (
+                  <div key={report.id} className="glass p-5 rounded-2xl border border-slate-800/50 hover:border-slate-700/60 transition-all flex flex-col justify-between">
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="px-2 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-[8px] font-bold text-brand-300 uppercase tracking-wider">
+                          {t(report.category)}
+                        </span>
+                        <SeverityBadge severity={report.severity} status={report.status} />
+                      </div>
+                      <h3 className="font-extrabold text-sm text-white line-clamp-1">{t(report.title)}</h3>
+                      <p className="text-slate-400 text-xs line-clamp-2 leading-relaxed">{t(report.description)}</p>
+                      
+                      <div className="text-[10px] text-slate-500 flex justify-between items-center">
+                        <span>{formatDate(report.date)}</span>
+                        {report.edited && (
+                          <span className="px-1.5 py-0.2 rounded bg-slate-800 border border-slate-750 text-[8px] font-bold text-slate-500 uppercase tracking-wide">
+                            {t("Edited")}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2.5 pt-4 border-t border-slate-900/40 mt-4">
+                      <Link 
+                        to={`/report/${report.id}`} 
+                        className="flex-1 py-1.5 bg-slate-900 border border-slate-800 hover:bg-slate-850 text-slate-350 hover:text-white rounded-xl text-[10px] font-bold transition-all text-center"
+                      >
+                        {t("View Details")}
+                      </Link>
+                      
+                      {report.status !== 'Resolved' && (
+                        <button
+                          onClick={() => {
+                            setEditingReport(report);
+                            setEditTitle(report.title);
+                            setEditCategory(report.category);
+                            setEditLocation(report.location);
+                            setEditSeverity(report.severity || 'Low');
+                            setEditDescription(report.description);
+                          }}
+                          className="flex-1 py-1.5 bg-blue-600/10 border border-blue-900/30 hover:bg-blue-600 hover:text-white text-blue-400 rounded-xl text-[10px] font-bold transition-all cursor-pointer"
+                        >
+                          {t("Edit")}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </section>
       )}
 
+      {/* --- TAB VIEW 2: COMMUNITIES WORKSPACE --- */}
+      {activeTab === 'communities' && (() => {
+        const communities = [
+          {
+            id: 'c1',
+            name: 'Downtown Infrastructure Hub',
+            ngo: 'Smart Urbanism Initiative',
+            purpose: 'To collaborate with municipal engineers to fix roads, signposts, and public buildings.',
+            mission: 'Making public spaces accessible, safe, and robust for every citizen.',
+            department: 'Public Infrastructure & Buildings',
+            volunteers: 142,
+            activeVolunteers: 85,
+            helped: 14,
+            solved: 112,
+            campaigns: 8,
+            contributionScore: 94,
+            successRate: 92,
+            location: 'Indiranagar Zone, Bengaluru',
+            members: '142 members',
+            desc: 'Working with municipal engineers to fix roads, signposts, and public buildings.',
+            logo: 'https://images.unsplash.com/photo-1540553016722-983e48a2cd10?auto=format&fit=crop&q=80&w=150',
+            cover: 'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&q=80&w=800',
+            history: 'Founded in 2024, our group has audited over 200 public spots, and partnered with the PWD department to rebuild 15 park walkways.',
+            achievements: 'Best Civic Group Award 2025, Replaced 40+ damaged signposts.',
+            partnerships: 'Public Works Department (PWD)',
+            contact: 'downtown-infra@jaansathi-ngo.org',
+            gallery: [
+              'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&q=80&w=800',
+              'https://images.unsplash.com/photo-1540553016722-983e48a2cd10?auto=format&fit=crop&q=80&w=800'
+            ]
+          },
+          {
+            id: 'c2',
+            name: 'Neighborhood Watch Council',
+            ngo: 'Citizens for Safety',
+            purpose: 'Citizen patrol and safety hazards identification for local municipal dispatchers and police.',
+            mission: 'Securing neighborhood streets through active watch and swift reporting.',
+            department: 'Roads & Safety Division',
+            volunteers: 94,
+            activeVolunteers: 40,
+            helped: 9,
+            solved: 76,
+            campaigns: 4,
+            contributionScore: 88,
+            successRate: 85,
+            location: 'Koramangala Zone, Bengaluru',
+            members: '94 members',
+            desc: 'Citizen patrol and safety hazards identification for local police dispatchers.',
+            logo: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150',
+            cover: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&q=80&w=800',
+            history: 'A citizen-led alliance formed during the 2024 streetlights safety audit. We report dark alleys, potholes, and broken signals.',
+            achievements: 'Triggered 50+ signal repairs, mapped 100+ low-light spots.',
+            partnerships: 'Traffic Police Division & BBMP',
+            contact: 'watch-council@jaansathi-ngo.org',
+            gallery: [
+              'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&q=80&w=800',
+              'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=800'
+            ]
+          },
+          {
+            id: 'c3',
+            name: 'Sanitation Eco Volunteers',
+            ngo: 'Clean Earth Foundation',
+            purpose: 'Organizing weekend trash cleanups and public trashcan distribution campaigns.',
+            mission: 'Achieving zero waste dumps in public city spaces.',
+            department: 'Sanitation & Environment',
+            volunteers: 180,
+            activeVolunteers: 110,
+            helped: 22,
+            solved: 154,
+            campaigns: 12,
+            contributionScore: 98,
+            successRate: 96,
+            location: 'Whitefield Zone, Bengaluru',
+            members: '180 members',
+            desc: 'Organizing weekend trash cleanups and public trashcan distribution.',
+            logo: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&q=80&w=150',
+            cover: 'https://images.unsplash.com/photo-1618477388954-7852f32655ec?auto=format&fit=crop&q=80&w=800',
+            history: 'Eco volunteers starting as a 5-person cleanup club in 2023. Now hosting weekly clean drives and zero waste workshops.',
+            achievements: 'Cleaned 3 major city lakesides, distributed 300+ dry/wet waste bins.',
+            partnerships: 'Waste Management Dept & BBMP',
+            contact: 'eco-volunteers@jaansathi-ngo.org',
+            gallery: [
+              'https://images.unsplash.com/photo-1618477388954-7852f32655ec?auto=format&fit=crop&q=80&w=800',
+              'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&q=80&w=800'
+            ]
+          }
+        ];
+
+        return (
+          <section className="glass rounded-3xl p-6 md:p-8 border border-slate-800/60 shadow-xl space-y-6">
+            <div className="flex items-center gap-2 border-b border-slate-800/60 pb-4">
+              <Users className="w-5 h-5 text-brand-400" />
+              <h2 className="text-lg font-extrabold text-white tracking-tight">{t("Communities Directory")}</h2>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {communities.map(group => {
+                const isJoined = user?.joinedCommunities?.includes(group.id);
+                return (
+                  <div 
+                    key={group.id} 
+                    className="p-0 rounded-2xl bg-slate-900/40 border border-slate-850 shadow-md flex flex-col justify-between hover:border-slate-800 transition-all overflow-hidden group select-none"
+                  >
+                    {/* Card Banner Cover */}
+                    <div className="relative h-28 w-full overflow-hidden shrink-0">
+                      <img 
+                        src={group.cover} 
+                        alt="cover" 
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      />
+                      <div className="absolute top-3 left-3 bg-brand-500 text-white font-extrabold text-[8px] uppercase tracking-wider px-2 py-0.5 rounded-full glass border border-white/10 shadow-sm">
+                        {t(group.department)}
+                      </div>
+                    </div>
+
+                    {/* Content spec */}
+                    <div className="p-5 flex-1 flex flex-col justify-between text-left space-y-3.5">
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 justify-between">
+                          <span className="text-[10px] text-slate-500 font-extrabold uppercase">{t(group.ngo)}</span>
+                          <span className="text-[9px] text-slate-455 font-bold">{group.members}</span>
+                        </div>
+                        <h3 className="text-base font-extrabold text-white leading-snug group-hover:text-brand-300 transition-colors">
+                          {t(group.name)}
+                        </h3>
+                        <p className="text-slate-400 text-xs line-clamp-3 leading-relaxed">
+                          {t(group.purpose)}
+                        </p>
+                      </div>
+
+                      {/* Info Spec Grid */}
+                      <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-900 text-[10px] text-slate-500 font-semibold">
+                        <div>
+                          <span>Success Rate:</span>
+                          <span className="text-white block font-bold text-xs">{group.successRate}%</span>
+                        </div>
+                        <div>
+                          <span>Contrib Score:</span>
+                          <span className="text-white block font-bold text-xs">{group.contributionScore}%</span>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2 pt-1 shrink-0">
+                        <button 
+                          onClick={() => setSelectedCommunity(group)}
+                          className="flex-1 py-2.5 bg-slate-950 hover:bg-slate-905 border border-slate-800 text-slate-355 hover:text-white rounded-xl text-[11px] font-bold transition-all cursor-pointer text-center"
+                        >
+                          {t("View Details")}
+                        </button>
+                        
+                        <button
+                          onClick={() => handleJoinCommunity(group.id, group.name)}
+                          disabled={isJoined || joiningCommId === group.id}
+                          className={`flex-1 py-2.5 rounded-xl font-bold text-[11px] transition-all duration-200 cursor-pointer ${
+                            isJoined
+                              ? 'bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 cursor-not-allowed'
+                              : 'bg-blue-600 hover:bg-blue-500 text-white shadow-md'
+                          }`}
+                        >
+                          {joiningCommId === group.id ? (
+                            <Loader className="w-3.5 h-3.5 animate-spin mx-auto" />
+                          ) : isJoined ? (
+                            t("Joined")
+                          ) : (
+                            t("Join Guild")
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        );
+      })()}
+
       {/* --- TAB VIEW 3: EVENTS WORKSPACE --- */}
       {activeTab === 'events' && (
         <section className="glass rounded-3xl p-6 md:p-8 border border-slate-800/60 shadow-xl space-y-6">
-          <div className="flex items-center gap-2 border-b border-slate-800/60 pb-4">
-            <Calendar className="w-5 h-5 text-brand-400" />
-            <h2 className="text-lg font-extrabold text-white tracking-tight">Active Volunteering Engagements</h2>
-          </div>
-          
-          <div className="p-12 text-center border border-dashed border-slate-800/60 rounded-2xl text-slate-500 space-y-3">
-            <Calendar className="w-8 h-8 mx-auto text-slate-700" />
-            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">No Registered Events</h3>
-            <p className="text-xs text-slate-500 max-w-sm mx-auto">You have not registered for any upcoming missions yet. Head over to the Explore Missions feed to find events.</p>
+          <div className="flex items-center gap-2 border-b border-slate-800/60 pb-4 justify-between">
+            <div className="flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-brand-400" />
+              <h2 className="text-lg font-extrabold text-white tracking-tight">{t("My Registered Events")}</h2>
+            </div>
             <button 
               onClick={() => navigate('/explore')}
-              className="mt-2 py-2 px-4 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-350 hover:text-white rounded-xl text-xs font-extrabold transition-all cursor-pointer shadow-md"
+              className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer animate-fade-in"
             >
-              Browse Active Missions
+              + {t("Browse Events")}
             </button>
           </div>
+
+          {eventsLoading ? (
+            <div className="flex justify-center items-center py-20">
+              <Loader className="w-8 h-8 text-brand-500 animate-spin" />
+            </div>
+          ) : events.length === 0 ? (
+            <div className="p-12 text-center border border-dashed border-slate-800/60 rounded-2xl text-slate-500 space-y-3">
+              <Calendar className="w-8 h-8 mx-auto text-slate-700" />
+              <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">{t("No Registered Events")}</h3>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto">{t("You have not registered for any upcoming missions yet. Head over to the Explore Missions feed to find events.")}</p>
+            </div>
+          ) : (() => {
+            const today = new Date();
+            const upcoming = events.filter(e => new Date(e.date) >= today);
+            const completed = events.filter(e => new Date(e.date) < today);
+            const totalHours = completed.length * 3;
+
+            return (
+              <div className="space-y-6">
+                {/* Metrics Stats row */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="p-4 bg-slate-900/50 border border-slate-800 rounded-2xl text-left">
+                    <span className="block text-[8px] text-slate-500 font-bold uppercase tracking-wider">{t("Upcoming Events")}</span>
+                    <span className="text-xl font-black text-blue-400 block mt-0.5">{upcoming.length}</span>
+                  </div>
+                  <div className="p-4 bg-slate-900/50 border border-slate-800 rounded-2xl text-left">
+                    <span className="block text-[8px] text-slate-500 font-bold uppercase tracking-wider">{t("Completed Events")}</span>
+                    <span className="text-xl font-black text-emerald-400 block mt-0.5">{completed.length}</span>
+                  </div>
+                  <div className="p-4 bg-slate-900/50 border border-slate-800 rounded-2xl text-left">
+                    <span className="block text-[8px] text-slate-500 font-bold uppercase tracking-wider">{t("Volunteer Hours Logged")}</span>
+                    <span className="text-xl font-black text-brand-300 block mt-0.5">{totalHours} {t("hours")}</span>
+                  </div>
+                </div>
+
+                {/* Event list */}
+                <div className="space-y-4">
+                  <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider text-left">{t("Participation History")}</span>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {events.map((evt) => {
+                      const isUpcoming = new Date(evt.date) >= today;
+                      return (
+                        <div 
+                          key={evt.id}
+                          onClick={() => navigate(`/event/${evt.id}`)}
+                          className="glass p-4 rounded-2xl border border-slate-850 hover:border-slate-800 transition-all flex gap-4 text-left items-start cursor-pointer hover:bg-slate-900/10"
+                        >
+                          <img 
+                            src={evt.imageUrl} 
+                            alt={evt.title} 
+                            className="w-16 h-16 rounded-xl object-cover border border-slate-800/80 shrink-0"
+                          />
+                          <div className="min-w-0 flex-1 space-y-1">
+                            <div className="flex justify-between items-start gap-2">
+                              <span className="text-[9px] text-brand-300 font-bold uppercase tracking-wider block">{t(evt.category)}</span>
+                              <span className={`px-2 py-0.2 rounded-full border text-[8px] font-bold uppercase tracking-wider shrink-0 ${
+                                isUpcoming 
+                                  ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' 
+                                  : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                              }`}>
+                                {isUpcoming ? t("Upcoming") : t("Completed")}
+                              </span>
+                            </div>
+                            <h4 className="font-extrabold text-sm text-white truncate">{t(evt.title)}</h4>
+                            <p className="text-[10px] text-slate-400 truncate">{t(evt.location)}</p>
+                            
+                            <div className="flex justify-between items-center text-[9px] text-slate-500 pt-1.5 border-t border-slate-900">
+                              <span>Date: {evt.date}</span>
+                              <span className="font-bold">Status: {isUpcoming ? 'Enrolled' : 'Attended'}</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </section>
       )}
 
@@ -1001,37 +1427,25 @@ export default function Profile() {
             {/* Column 1: Password reset & 2FA toggles */}
             <div className="space-y-6">
               
-              {/* 2FA Panel */}
-              <div className="p-5 rounded-2xl bg-slate-900/40 border border-slate-800/60 space-y-4">
-                <div className="flex justify-between items-start">
-                  <div className="space-y-1 text-left">
-                    <h3 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5">
-                      <Smartphone className="w-4 h-4 text-blue-400" />
-                      <span>{t("Two-Factor Authentication (2FA)")}</span>
-                    </h3>
-                    <p className="text-[10px] text-slate-400 leading-relaxed pr-6">{t("Add a secondary layer of authentication checks. Verify login attempts using generated security codes.")}</p>
+              {/* 2FA Panel - Coming Soon */}
+              <div className="p-5 rounded-2xl bg-slate-900/40 border border-slate-800/60 space-y-4 text-left relative overflow-hidden group">
+                <div className="flex gap-4 items-start">
+                  <div className="p-3 bg-slate-950 border border-slate-850 rounded-xl text-slate-400 shrink-0">
+                    <Smartphone className="w-5 h-5 text-blue-450 animate-pulse" />
                   </div>
-
-                  <button 
-                    onClick={handle2FAToggle}
-                    className="p-1 hover:bg-slate-800 rounded-lg text-slate-400 transition-colors cursor-pointer"
-                  >
-                    {user.security?.twoFactorActive ? (
-                      <ToggleRight className="w-9 h-9 text-emerald-450" />
-                    ) : (
-                      <ToggleLeft className="w-9 h-9 text-slate-600" />
-                    )}
-                  </button>
-                </div>
-                
-                <div className="flex gap-2">
-                  <span className={`px-2.5 py-0.5 rounded-full border text-[8px] font-black uppercase tracking-widest ${
-                    user.security?.twoFactorActive 
-                      ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-450'
-                      : 'bg-slate-900 border-slate-800/60 text-slate-400'
-                  }`}>
-                    Status: {user.security?.twoFactorActive ? t("Active") : t("Inactive")}
-                  </span>
+                  <div className="space-y-1 flex-1">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-xs font-black text-white uppercase tracking-wider">
+                        {t("Two-Factor Authentication")}
+                      </h3>
+                      <span className="px-2 py-0.2 rounded-full bg-slate-800 text-[8px] font-bold text-slate-400 border border-slate-700">
+                        {t("Coming Soon")}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 leading-relaxed">
+                      {t("Add a secondary layer of authentication checks. Verify login attempts using generated mobile security codes. This feature will be enabled in a future release.")}
+                    </p>
+                  </div>
                 </div>
               </div>
 
@@ -1237,20 +1651,7 @@ export default function Profile() {
                 </div>
               </div>
 
-              {/* Accessibility */}
-              <div className="p-5 rounded-2xl bg-slate-900/40 border border-slate-800/60 space-y-3 text-left">
-                <h3 className="text-xs font-black text-white uppercase tracking-wider">{t("Accessibility Controls")}</h3>
-                <div className="space-y-2.5">
-                  <label className="flex items-center gap-2 text-[11px] text-slate-400 font-semibold cursor-pointer">
-                    <input type="checkbox" className="rounded bg-slate-950 border-slate-800 focus:ring-0 text-blue-650" />
-                    <span>{t("High Contrast UI elements")}</span>
-                  </label>
-                  <label className="flex items-center gap-2 text-[11px] text-slate-400 font-semibold cursor-pointer">
-                    <input type="checkbox" className="rounded bg-slate-950 border-slate-800 focus:ring-0 text-blue-650" />
-                    <span>{t("Reduce visual graphics animations")}</span>
-                  </label>
-                </div>
-              </div>
+              {/* Accessibility UI Removed */}
 
             </div>
 
@@ -1292,6 +1693,239 @@ export default function Profile() {
           </div>
 
         </section>
+      )}
+
+      {/* Community Detail Side Drawer Panel */}
+      {selectedCommunity && (
+        <div className="fixed inset-0 z-50 flex justify-end bg-slate-955/80 backdrop-blur-sm animate-fade-in" onClick={() => setSelectedCommunity(null)}>
+          <div 
+            className="w-full max-w-lg h-full bg-[#0b0f19]/95 border-l border-slate-850 shadow-2xl relative flex flex-col justify-between overflow-y-auto animate-slide-left p-6 space-y-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Drawer Header */}
+            <div className="flex justify-between items-center border-b border-slate-850 pb-4">
+              <div className="flex items-center gap-3">
+                <img 
+                  src={selectedCommunity.logo} 
+                  alt={selectedCommunity.name} 
+                  className="w-10 h-10 rounded-full object-cover ring-2 ring-slate-800"
+                />
+                <div className="text-left">
+                  <span className="text-[10px] text-brand-300 font-bold uppercase tracking-wider">{t(selectedCommunity.ngo)}</span>
+                  <h2 className="text-base font-extrabold text-white leading-tight">{t(selectedCommunity.name)}</h2>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedCommunity(null)}
+                className="p-2 bg-slate-900 border border-slate-800 rounded-full text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-4.5 h-4.5" />
+              </button>
+            </div>
+
+            {/* Drawer Body Scroll */}
+            <div className="flex-1 overflow-y-auto space-y-5 pr-1 scrollbar-thin text-left">
+              {/* Cover Banner */}
+              <div className="relative h-44 w-full rounded-2xl overflow-hidden border border-slate-850 shadow-md">
+                <img 
+                  src={selectedCommunity.cover} 
+                  alt={selectedCommunity.name} 
+                  className="w-full h-full object-cover"
+                />
+              </div>
+
+              {/* Specs Grid */}
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="p-3 bg-slate-900/40 border border-slate-850 rounded-xl">
+                  <span className="block text-slate-500 text-[8px] uppercase tracking-wider font-bold">{t("Success Rate")}</span>
+                  <span className="font-bold text-white">{selectedCommunity.successRate}%</span>
+                </div>
+                <div className="p-3 bg-slate-900/40 border border-slate-850 rounded-xl">
+                  <span className="block text-slate-500 text-[8px] uppercase tracking-wider font-bold">{t("Contribution Score")}</span>
+                  <span className="font-bold text-white">{selectedCommunity.contributionScore}%</span>
+                </div>
+                <div className="p-3 bg-slate-900/40 border border-slate-850 rounded-xl">
+                  <span className="block text-slate-500 text-[8px] uppercase tracking-wider font-bold">{t("Active / Total Volunteers")}</span>
+                  <span className="font-bold text-white">{selectedCommunity.activeVolunteers} / {selectedCommunity.volunteers}</span>
+                </div>
+                <div className="p-3 bg-slate-900/40 border border-slate-850 rounded-xl">
+                  <span className="block text-slate-500 text-[8px] uppercase tracking-wider font-bold">{t("Issues Resolved")}</span>
+                  <span className="font-bold text-white">{selectedCommunity.solved}</span>
+                </div>
+              </div>
+
+              {/* Mission Statement */}
+              <div className="space-y-1">
+                <span className="block text-[8px] text-slate-500 font-bold uppercase tracking-wider">{t("Our Mission")}</span>
+                <p className="text-slate-200 text-xs leading-relaxed font-semibold italic">"{t(selectedCommunity.mission)}"</p>
+              </div>
+
+              {/* History */}
+              <div className="space-y-1">
+                <span className="block text-[8px] text-slate-500 font-bold uppercase tracking-wider">{t("Background & History")}</span>
+                <p className="text-slate-405 text-xs leading-relaxed">{t(selectedCommunity.history)}</p>
+              </div>
+
+              {/* Achievements */}
+              <div className="space-y-1">
+                <span className="block text-[8px] text-slate-500 font-bold uppercase tracking-wider">{t("Major Achievements")}</span>
+                <p className="text-slate-405 text-xs leading-relaxed">{t(selectedCommunity.achievements)}</p>
+              </div>
+
+              {/* Partnerships */}
+              <div className="space-y-1">
+                <span className="block text-[8px] text-slate-500 font-bold uppercase tracking-wider">{t("Government / Department Partnerships")}</span>
+                <p className="text-slate-300 text-xs font-semibold">{t(selectedCommunity.partnerships)}</p>
+              </div>
+
+              {/* Contact Information */}
+              <div className="p-3 bg-slate-900/40 border border-slate-850 rounded-xl text-xs space-y-1">
+                <span className="block text-[8px] text-slate-500 font-bold uppercase tracking-wider">{t("Contact Details")}</span>
+                <div><span className="text-slate-500">{t("Email:")}</span> <span className="font-semibold text-blue-400">{selectedCommunity.contact}</span></div>
+                <div><span className="text-slate-500">{t("Location:")}</span> <span className="font-semibold text-slate-300">{t(selectedCommunity.location)}</span></div>
+              </div>
+
+              {/* Gallery Grid */}
+              <div className="space-y-2">
+                <span className="block text-[8px] text-slate-500 font-bold uppercase tracking-wider">{t("Mission Photo Gallery")}</span>
+                <div className="grid grid-cols-2 gap-2">
+                  {selectedCommunity.gallery.map((imgUrl, i) => (
+                    <img 
+                      key={i} 
+                      src={imgUrl} 
+                      alt="Gallery" 
+                      className="w-full h-24 object-cover rounded-xl border border-slate-850"
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Action Join Button in Drawer Footer */}
+            <div className="border-t border-slate-850 pt-4">
+              <button
+                onClick={() => {
+                  handleJoinCommunity(selectedCommunity.id, selectedCommunity.name);
+                  setSelectedCommunity(null);
+                }}
+                disabled={user?.joinedCommunities?.includes(selectedCommunity.id) || joiningCommId === selectedCommunity.id}
+                className={`w-full py-3 rounded-xl font-bold text-xs transition-all duration-200 cursor-pointer ${
+                  user?.joinedCommunities?.includes(selectedCommunity.id)
+                    ? 'bg-emerald-600/15 text-emerald-400 border border-emerald-500/20 cursor-not-allowed'
+                    : 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg'
+                }`}
+              >
+                {user?.joinedCommunities?.includes(selectedCommunity.id) ? t("Joined / Member") : t("Join Active Guild")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Edit Details Popup Modal (Reports Tab) */}
+      {editingReport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-955/80 backdrop-blur-sm animate-fade-in" onClick={() => setEditingReport(null)}>
+          <form 
+            onSubmit={handleUpdateReport}
+            className="w-full max-w-lg bg-[#0b0f19]/95 border border-slate-855 shadow-2xl rounded-3xl relative flex flex-col overflow-hidden animate-scale-up p-6 space-y-4 text-left"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center border-b border-slate-850 pb-3">
+              <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-1.5">
+                <Edit3 className="w-4 h-4 text-blue-455" />
+                <span>{t("Edit Incident Submission Details")}</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setEditingReport(null)}
+                className="p-1 bg-slate-900 border border-slate-800 rounded-full text-slate-400 hover:text-white transition-colors cursor-pointer animate-fade-in"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3.5 text-xs text-left">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-450 uppercase tracking-wider">{t("Issue Title")}</label>
+                <input
+                  type="text"
+                  required
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-850 rounded-xl text-xs text-white focus:outline-none focus:border-blue-600 transition-colors font-semibold"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-450 uppercase tracking-wider">{t("Category")}</label>
+                  <select
+                    value={editCategory}
+                    onChange={(e) => setEditCategory(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-955 border border-slate-850 rounded-xl text-xs text-white focus:outline-none focus:border-blue-600 transition-colors font-semibold"
+                  >
+                    <option value="Roads & Safety">{t("Roads & Safety")}</option>
+                    <option value="Sanitation">{t("Sanitation")}</option>
+                    <option value="Infrastructure">{t("Infrastructure")}</option>
+                    <option value="Public Space">{t("Public Space")}</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-slate-455 uppercase tracking-wider">{t("Severity Level")}</label>
+                  <select
+                    value={editSeverity}
+                    onChange={(e) => setEditSeverity(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-955 border border-slate-850 rounded-xl text-xs text-white focus:outline-none focus:border-blue-600 transition-colors font-semibold"
+                  >
+                    <option value="Low">{t("Low")}</option>
+                    <option value="Medium">{t("Medium")}</option>
+                    <option value="High">{t("High")}</option>
+                    <option value="Critical">{t("Critical")}</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-455 uppercase tracking-wider">{t("Location Address")}</label>
+                <input
+                  type="text"
+                  required
+                  value={editLocation}
+                  onChange={(e) => setEditLocation(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-955 border border-slate-855 rounded-xl text-xs text-white focus:outline-none focus:border-blue-600 transition-colors font-semibold"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-455 uppercase tracking-wider">{t("Issue Description Details")}</label>
+                <textarea
+                  required
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  className="w-full px-3 py-2.5 bg-slate-955 border border-slate-855 rounded-xl text-xs text-white focus:outline-none focus:border-blue-600 transition-colors h-24 resize-none leading-relaxed font-semibold"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2.5 pt-2 border-t border-slate-850">
+              <button
+                type="button"
+                onClick={() => setEditingReport(null)}
+                className="flex-1 py-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
+              >
+                {t("Cancel")}
+              </button>
+
+              <button
+                type="submit"
+                disabled={updatingReportLoading}
+                className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer disabled:opacity-40 shadow-md text-center"
+              >
+                {updatingReportLoading ? t("Saving...") : t("Save Changes")}
+              </button>
+            </div>
+          </form>
+        </div>
       )}
 
     </div>

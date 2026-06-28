@@ -8,6 +8,8 @@ import Login from './pages/Login';
 import CitizenDashboard from './pages/CitizenDashboard';
 import ReportIssue from './pages/ReportIssue';
 import OfficerDashboard from './pages/OfficerDashboard';
+import EventDetail from './pages/EventDetail';
+import ReportDetail from './pages/ReportDetail';
 import Chatbot from './components/Chatbot';
 import NotificationDrawer from './components/NotificationDrawer';
 import { TranslationProvider } from './context/TranslationContext';
@@ -79,6 +81,8 @@ export default function App() {
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/explore" element={<Explore />} />
+              <Route path="/event/:id" element={<EventDetail />} />
+              <Route path="/report/:id" element={<ReportDetail />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/login" element={<Login />} />
               <Route path="/citizen-dashboard" element={<CitizenDashboard />} />

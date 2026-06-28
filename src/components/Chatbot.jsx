@@ -17,6 +17,19 @@ export default function Chatbot() {
   const [inputText, setInputText] = useState('');
   const [thinking, setThinking] = useState(false);
   const { t } = useTranslation();
+  const [theme, setTheme] = useState(() => {
+    return document.documentElement.classList.contains('light') ? 'light' : 'dark';
+  });
+
+  useEffect(() => {
+    const handleThemeChange = () => {
+      setTheme(document.documentElement.classList.contains('light') ? 'light' : 'dark');
+    };
+    window.addEventListener('mock-auth-state-change', handleThemeChange);
+    return () => {
+      window.removeEventListener('mock-auth-state-change', handleThemeChange);
+    };
+  }, []);
   
   const messagesEndRef = useRef(null);
 
@@ -77,10 +90,12 @@ export default function Chatbot() {
       
       {/* --- CHAT DIALOG PANEL --- */}
       {isOpen && (
-        <div className="w-80 sm:w-96 h-[460px] rounded-3xl border border-slate-200 shadow-2xl bg-white flex flex-col overflow-hidden mb-4 animate-scale-up">
+        <div className={`w-[90vw] sm:w-[450px] md:w-[480px] h-[580px] max-h-[80vh] rounded-3xl border shadow-2xl flex flex-col overflow-hidden mb-4 animate-scale-up transition-colors duration-300 ${
+          theme === 'light' ? 'bg-white border-slate-200' : 'bg-slate-900/95 border-slate-850 backdrop-blur-md'
+        }`}>
           
           {/* Header */}
-          <div className="p-4 bg-gradient-to-r from-sky-400 to-blue-500 border-b border-blue-100 flex items-center justify-between">
+          <div className="p-4 bg-gradient-to-r from-sky-400 to-blue-500 border-b border-blue-100 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-3">
               <div className="relative">
                 <div className="p-2 bg-white/20 text-white rounded-xl border border-white/30">
@@ -103,7 +118,9 @@ export default function Chatbot() {
           </div>
 
           {/* Messages Feed */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-white scrollbar-thin">
+          <div className={`flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin transition-colors duration-300 ${
+            theme === 'light' ? 'bg-white' : 'bg-[#0f1422]/50'
+          }`}>
             {messages.map((msg) => {
               const isUser = msg.role === 'user';
               return (
@@ -115,7 +132,9 @@ export default function Chatbot() {
                     className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-xs leading-relaxed ${
                       isUser
                         ? 'bg-blue-600 text-white rounded-tr-none shadow-md'
-                        : 'bg-sky-50/70 border border-sky-100/60 text-blue-950 rounded-tl-none font-medium'
+                        : theme === 'light'
+                        ? 'bg-sky-50/70 border border-sky-100/60 text-blue-950 rounded-tl-none font-medium'
+                        : 'bg-slate-850 border border-slate-800 text-slate-200 rounded-tl-none font-medium'
                     }`}
                   >
                     <p className="whitespace-pre-line text-left">{t(msg.text)}</p>
@@ -127,7 +146,9 @@ export default function Chatbot() {
             {/* Typing indicator */}
             {thinking && (
               <div className="flex justify-start animate-fade-in text-left">
-                <div className="bg-sky-50/70 border border-sky-100/60 text-blue-950 rounded-2xl rounded-tl-none px-4 py-3 flex items-center gap-1.5">
+                <div className={`rounded-2xl rounded-tl-none px-4 py-3 flex items-center gap-1.5 ${
+                  theme === 'light' ? 'bg-sky-50/70 border border-sky-100/60 text-blue-950' : 'bg-slate-850 border border-slate-800 text-slate-200'
+                }`}>
                   <Loader className="w-3.5 h-3.5 animate-spin text-sky-500" />
                   <span className="text-[10px] font-bold">{t("Sathi is thinking...")}</span>
                 </div>
@@ -138,18 +159,24 @@ export default function Chatbot() {
           </div>
 
           {/* Input Form Footer */}
-          <form onSubmit={handleSend} className="p-3 bg-slate-50 border-t border-slate-100 flex items-center gap-2">
+          <form onSubmit={handleSend} className={`p-3 border-t flex items-center gap-2 transition-colors duration-300 ${
+            theme === 'light' ? 'bg-slate-50 border-slate-100' : 'bg-slate-950/40 border-slate-850'
+          }`}>
             <input
               type="text"
               placeholder={t("Ask me how to report, view points...")}
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
-              className="flex-1 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-sky-400 transition-colors"
+              className={`flex-1 px-4 py-2.5 border rounded-xl text-xs transition-colors duration-300 ${
+                theme === 'light' 
+                  ? 'bg-white border-slate-200 text-slate-800 placeholder-slate-400 focus:border-sky-400' 
+                  : 'bg-slate-900 border-slate-800 text-white placeholder-slate-550 focus:border-blue-500'
+              }`}
             />
             <button
               type="submit"
               disabled={!inputText.trim() || thinking}
-              className="p-2.5 bg-sky-500 hover:bg-sky-600 disabled:bg-slate-200 text-white disabled:text-slate-400 rounded-xl shadow-md transition-all cursor-pointer shrink-0 flex items-center justify-center"
+              className="p-2.5 bg-sky-500 hover:bg-sky-600 disabled:bg-slate-250 text-white disabled:text-slate-500 rounded-xl shadow-md transition-all cursor-pointer shrink-0 flex items-center justify-center"
             >
               <Send className="w-4 h-4" />
             </button>

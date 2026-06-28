@@ -68,6 +68,7 @@ export default function Sidebar() {
     { to: '/', label: 'Home Feed', icon: Home },
     { to: user.role === 'officer' ? '/officer-dashboard' : '/citizen-dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/profile?tab=profile', label: 'Profile', icon: User },
+    { to: '/profile?tab=reports', label: 'My Submissions', icon: FileText },
     { to: '/profile?tab=communities', label: 'Communities', icon: Users },
     { to: '/explore', label: 'Events', icon: Calendar },
     { to: '/profile?tab=ai', label: 'AI Assistant', icon: Sparkles },

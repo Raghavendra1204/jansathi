@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Search, MapPin, Calendar, Clock, CheckCircle2, AlertCircle, Loader } from 'lucide-react';
-import { fetchMissions, joinMission } from '../services/api';
+import { useNavigate } from 'react-router-dom';
+import { Search, MapPin, Calendar, Clock, CheckCircle2, AlertCircle, Loader, X } from 'lucide-react';
+import { fetchMissions, joinMission, logUserActivity } from '../services/api';
 import { useTranslation } from '../context/TranslationContext';
 
 const CATEGORIES = ['All', 'Environment', 'Education', 'Social Help', 'Animal Welfare'];
 
 export default function Explore() {
+  const navigate = useNavigate();
   const [missions, setMissions] = useState([]);
   const [filteredMissions, setFilteredMissions] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -62,6 +64,13 @@ export default function Explore() {
           type: 'success',
           message: res.message || `Mission joined successfully! See you there.`
         });
+        
+        // Award XP and log activity
+        const mission = missions.find(m => m.id === missionId);
+        if (user && mission) {
+          await logUserActivity(user.uid, `Joined Volunteer Event: ${mission.title}`, 75, 'Volunteer Joined', `Registered as volunteer for mission: ${mission.title}`, 'Completed', missionId);
+        }
+
         // Update spots locally
         setMissions(prevMissions => 
           prevMissions.map(m => {
@@ -171,7 +180,7 @@ export default function Explore() {
               >
                 {/* Image */}
                 <div
-                  onClick={() => setSelectedMission(mission)}
+                  onClick={() => navigate(`/event/${mission.id}`)}
                   className="relative h-48 w-full overflow-hidden cursor-pointer"
                 >
                   <img
@@ -189,7 +198,7 @@ export default function Explore() {
 
                 {/* Content */}
                 <div
-                  onClick={() => setSelectedMission(mission)}
+                  onClick={() => navigate(`/event/${mission.id}`)}
                   className="p-6 flex-1 flex flex-col justify-between space-y-4 cursor-pointer"
                 >
                   <div className="space-y-2 text-left">
@@ -273,136 +282,7 @@ export default function Explore() {
         </div>
       )}
 
-      {/* Mission Detail Modal */}
-      {selectedMission && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in">
-          <div className="glass max-w-lg w-full rounded-3xl border border-slate-800 shadow-2xl overflow-hidden animate-scale-up">
-            
-            {/* Modal Image */}
-            <div className="relative h-56 w-full">
-              <img
-                src={selectedMission.imageUrl}
-                alt={selectedMission.title}
-                className="w-full h-full object-cover"
-              />
-              <div className="absolute top-4 left-4 px-3 py-1 rounded-full glass border border-white/10 text-xs font-semibold text-white">
-                {t(selectedMission.category)}
-              </div>
-              <div className="absolute top-4 right-4 px-2.5 py-1 rounded-lg bg-brand-500 text-xs font-bold text-white shadow-md">
-                +{selectedMission.xpReward} XP
-              </div>
-              
-              {/* Close Button */}
-              <button
-                onClick={() => setSelectedMission(null)}
-                className="absolute top-4 right-4 p-2 bg-slate-955/85 hover:bg-slate-900 border border-slate-800 rounded-full text-slate-400 hover:text-white transition-colors cursor-pointer flex items-center justify-center"
-                title={t("Close")}
-              >
-                <X className="w-4.5 h-4.5" />
-              </button>
-            </div>
-
-            {/* Modal Body */}
-            <div className="p-6 space-y-5 text-left">
-              <div className="space-y-2">
-                <span className="text-[10px] text-brand-300 font-bold tracking-wider uppercase">
-                  {t("Organized by")} {t(selectedMission.organizer)}
-                </span>
-                <h2 className="text-xl font-extrabold text-white leading-tight">
-                  {t(selectedMission.title)}
-                </h2>
-                
-                {/* Joined Status Badge */}
-                {selectedMission.joined && (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold uppercase tracking-wider">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>{t("Registered / Joined")}</span>
-                  </span>
-                )}
-              </div>
-
-              <p className="text-slate-300 text-xs leading-relaxed max-h-36 overflow-y-auto pr-2 scrollbar-thin">
-                {t(selectedMission.description)}
-              </p>
-
-              <div className="grid grid-cols-3 gap-2.5 pt-2 border-t border-slate-800/40 text-[10px] text-slate-355 font-semibold">
-                <div className="p-2.5 bg-slate-900/50 border border-slate-800/40 rounded-xl space-y-1">
-                  <span className="block text-slate-500 text-[8px] uppercase tracking-wider">{t("Location")}</span>
-                  <span className="block text-white truncate">{t(selectedMission.location)}</span>
-                </div>
-                <div className="p-2.5 bg-slate-900/50 border border-slate-800/40 rounded-xl space-y-1">
-                  <span className="block text-slate-500 text-[8px] uppercase tracking-wider">{t("Date")}</span>
-                  <span className="block text-white">{selectedMission.date}</span>
-                </div>
-                <div className="p-2.5 bg-slate-900/50 border border-slate-800/40 rounded-xl space-y-1">
-                  <span className="block text-slate-500 text-[8px] uppercase tracking-wider">{t("Time")}</span>
-                  <span className="block text-white truncate">{t(selectedMission.time)}</span>
-                </div>
-              </div>
-
-              {/* Progress and Actions */}
-              <div className="space-y-4 pt-2">
-                <div className="space-y-1.5">
-                  <div className="flex justify-between text-xs font-semibold">
-                    <span className="text-slate-400">{t("Volunteers Filled")}</span>
-                    <span className="text-brand-300">{selectedMission.spotsFilled} / {selectedMission.spotsTotal} {t("spots")}</span>
-                  </div>
-                  <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                    <div
-                      className="bg-brand-500 h-full rounded-full transition-all duration-500"
-                      style={{ width: `${(selectedMission.spotsFilled / selectedMission.spotsTotal) * 100}%` }}
-                    />
-                  </div>
-                </div>
-
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setSelectedMission(null)}
-                    className="flex-1 py-3 border border-slate-800 hover:bg-slate-900 text-slate-355 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer text-center font-semibold"
-                  >
-                    {t("Close")}
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      handleJoinMission(selectedMission.id);
-                      setSelectedMission(prev => prev ? { ...prev, spotsFilled: Math.min(prev.spotsTotal, prev.spotsFilled + 1), joined: true } : null);
-                    }}
-                    disabled={selectedMission.joined || selectedMission.spotsFilled >= selectedMission.spotsTotal || joiningId === selectedMission.id}
-                    className={`flex-1 py-3 rounded-xl font-bold text-xs transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer ${
-                      selectedMission.joined
-                        ? 'bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 cursor-not-allowed'
-                        : selectedMission.spotsFilled >= selectedMission.spotsTotal
-                        ? 'bg-slate-800 border border-slate-700 text-slate-500 cursor-not-allowed'
-                        : joiningId === selectedMission.id
-                        ? 'bg-brand-600/40 text-brand-300'
-                        : 'bg-gradient-to-r from-brand-600 to-brand-500 text-white hover:scale-[1.01] shadow-lg'
-                    }`}
-                  >
-                    {joiningId === selectedMission.id ? (
-                      <>
-                        <Loader className="w-3.5 h-3.5 animate-spin" />
-                        <span>{t("Registering...")}</span>
-                      </>
-                    ) : selectedMission.joined ? (
-                      <>
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>{t("Registered")}</span>
-                      </>
-                    ) : selectedMission.spotsFilled >= selectedMission.spotsTotal ? (
-                      <span>{t("Mission Full")}</span>
-                    ) : (
-                      <span>{t("Register for Mission")}</span>
-                    )}
-                  </button>
-                </div>
-              </div>
-
-            </div>
-
-          </div>
-        </div>
-      )}
+      {/* Detail Modal removed - navigating to dedicated pages */}
     </div>
   );
 }

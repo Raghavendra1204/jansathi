@@ -45,8 +45,8 @@ export default function MapSelector({ onLocationSelect, locationText }) {
     if (loading || error || !window.L || !mapRef.current) return;
 
     if (!leafletMap.current) {
-      // Default: Downtown Los Angeles (civic center style placeholder)
-      const defaultCenter = [34.0522, -118.2437];
+      // Default: Bengaluru Center
+      const defaultCenter = [12.9716, 77.5946];
 
       // Initialize map instance
       leafletMap.current = window.L.map(mapRef.current, {

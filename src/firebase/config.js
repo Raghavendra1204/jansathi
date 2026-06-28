@@ -1,6 +1,7 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 
 const apiKey = import.meta.env.VITE_FIREBASE_API_KEY;
 // Determine if we should run in mock mode (if keys are blank or placeholders)
@@ -9,6 +10,7 @@ const isMockFirebase = !apiKey || apiKey.includes('YOUR_FIREBASE_API_KEY') || ap
 let app = null;
 let auth = null;
 let db = null;
+let storage = null;
 
 if (!isMockFirebase) {
   try {
@@ -22,15 +24,17 @@ if (!isMockFirebase) {
     };
     app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
     auth = getAuth(app);
-    db = getFirestore(app);
+    db = getFirestore(app, 'default');
+    storage = getStorage(app);
     console.log("Firebase initialized successfully in production mode.");
   } catch (error) {
     console.error("Failed to initialize production Firebase. Falling back to Mock Mode:", error);
     auth = null;
     db = null;
+    storage = null;
   }
 } else {
   console.warn("Jaan Sathi is running in local MOCK FIREBASE mode. Configure real credentials in the .env file to enable live Firestore syncing.");
 }
 
-export { app, auth, db, isMockFirebase };
+export { app, auth, db, storage, isMockFirebase };

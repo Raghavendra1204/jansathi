@@ -6,9 +6,10 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { analyzeReport } from '../services/gemini';
-import { createReport } from '../services/api';
+import { createReport, logUserActivity } from '../services/api';
 import MapSelector from '../components/MapSelector';
 import { useTranslation } from '../context/TranslationContext';
+import SeverityBadge from '../components/SeverityBadge';
 
 const CATEGORIES = ['Infrastructure', 'Roads & Safety', 'Sanitation', 'Public Space', 'Other'];
 
@@ -195,6 +196,9 @@ export default function ReportIssue() {
         finalLat,
         finalLng
       );
+      if (user) {
+        await logUserActivity(user.uid, `Reported Civic Issue: ${title}`, 50, 'Issue Submitted', `Submitted a new civic report titled "${title}"`, 'Completed');
+      }
       setSubmitted(true);
     } catch (error) {
       console.error("Submission failed:", error);
@@ -480,15 +484,7 @@ export default function ReportIssue() {
                     {t("Organized by Municipal Dispatch")}
                   </span>
                   
-                  {/* Severity Badge */}
-                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold tracking-wider uppercase border ${
-                    severity === 'Critical' ? 'bg-rose-500/10 text-rose-455 border-rose-500/30 animate-pulse' :
-                    severity === 'High' ? 'bg-amber-500/10 text-amber-455 border-amber-500/30' :
-                    severity === 'Medium' ? 'bg-blue-500/10 text-blue-455 border-blue-500/30' :
-                    'bg-slate-800 text-slate-405 border-slate-700'
-                  }`}>
-                    {t(severity)}
-                  </span>
+                  <SeverityBadge severity={severity} />
                 </div>
                 
                 <h3 className="font-bold text-base text-white truncate">
