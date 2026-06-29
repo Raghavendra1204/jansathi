@@ -419,6 +419,25 @@ export async function createReport(title, category, location, description, image
   }
 }
 
+export async function deleteReport(reportId) {
+  if (isMockFirebase) {
+    const reports = getStoredReports();
+    const filtered = reports.filter(r => r.id !== reportId);
+    saveStoredReports(filtered);
+    return { success: true };
+  }
+
+  try {
+    const { db } = await import('../firebase/config');
+    const { doc, deleteDoc } = await import('firebase/firestore');
+    await deleteDoc(doc(db, 'reports', reportId));
+    return { success: true };
+  } catch (error) {
+    console.error("Error deleting report:", error);
+    throw error;
+  }
+}
+
 export async function updateReport(reportId, updatedData) {
   const currentSession = JSON.parse(localStorage.getItem('mock_current_user') || '{}');
   const uid = currentSession.uid || 'unknown_user';
@@ -779,6 +798,9 @@ export async function fetchDocuments(userId = null) {
   if (isMockFirebase) {
     await new Promise(resolve => setTimeout(resolve, 200));
     const docs = getStoredDocuments();
+    if (currentSession.role === 'officer') {
+      return docs;
+    }
     return docs.filter(d => d.userId === uid || !d.userId);
   }
 

@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { formatDate } from '../utils/helpers';
 import { useTranslation } from '../context/TranslationContext';
-import { fetchReports, createReport } from '../services/api';
+import { fetchReports, createReport, updateReport, deleteReport } from '../services/api';
 
 const MOCK_REPORTS = [
   {
@@ -206,6 +206,20 @@ export default function CitizenDashboard() {
       setIsReporting(false);
     } catch (err) {
       console.error("Failed to create report:", err);
+    }
+  };
+
+  const handleDeleteReport = async (reportId) => {
+    if (!window.confirm(t('Are you sure you want to delete this civic report? This action cannot be undone.'))) return;
+    try {
+      await deleteReport(reportId);
+      setReports(prev => prev.filter(r => r.id !== reportId));
+      setSuccessMsg(t('Report deleted successfully!'));
+      setTimeout(() => setSuccessMsg(''), 3000);
+    } catch (err) {
+      console.error(err);
+      setErrorMsg(t('Failed to delete report.'));
+      setTimeout(() => setErrorMsg(''), 3000);
     }
   };
 
@@ -860,7 +874,57 @@ export default function CitizenDashboard() {
                           </div>
                         )}
 
-                      </div>
+                      {/* Action buttons (Edit, Share, View dedicated, Delete) */}
+                      {user && report.userId === user.uid && (
+                        <div className="flex gap-2.5 pt-4 border-t border-slate-800/40 mt-4 flex-wrap" onClick={(e) => e.stopPropagation()}>
+                          <Link 
+                            to={`/report/${report.id}`} 
+                            className="flex-1 min-w-[80px] py-2 bg-slate-900 border border-slate-850 hover:bg-slate-800 text-slate-350 hover:text-white rounded-xl text-[10px] font-extrabold transition-all flex items-center justify-center gap-1.5 cursor-pointer text-center font-bold"
+                          >
+                            <FileText className="w-3.5 h-3.5" />
+                            <span>{t("View Page")}</span>
+                          </Link>
+
+                          <button
+                            onClick={() => {
+                              const postUrl = `${window.location.origin}/report/${report.id}`;
+                              navigator.clipboard.writeText(postUrl);
+                              setSuccessMsg(t("Copied direct link to clipboard!"));
+                              setTimeout(() => setSuccessMsg(''), 3000);
+                            }}
+                            className="flex-1 min-w-[80px] py-2 bg-slate-900 border border-slate-855 hover:bg-slate-800 text-slate-350 hover:text-white rounded-xl text-[10px] font-extrabold transition-all flex items-center justify-center gap-1.5 cursor-pointer font-bold"
+                          >
+                            <Share2 className="w-3.5 h-3.5" />
+                            <span>{t("Share Link")}</span>
+                          </button>
+                          
+                          {report.status !== 'Resolved' && (
+                            <button
+                              onClick={() => {
+                                setEditingReport(report);
+                                setEditTitle(report.title);
+                                setEditCategory(report.category);
+                                setEditLocation(report.location);
+                                setEditSeverity(report.severity || 'Low');
+                                setEditDescription(report.description);
+                              }}
+                              className="flex-1 min-w-[80px] py-2 bg-blue-600/10 border border-blue-900/30 hover:bg-blue-600 hover:text-white text-blue-400 rounded-xl text-[10px] font-extrabold transition-all flex items-center justify-center gap-1.5 cursor-pointer font-bold"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                              <span>{t("Edit Details")}</span>
+                            </button>
+                          )}
+
+                          <button
+                            onClick={() => handleDeleteReport(report.id)}
+                            className="flex-1 min-w-[80px] py-2 bg-rose-600/15 border border-rose-900/30 hover:bg-rose-600 hover:text-white text-rose-455 rounded-xl text-[10px] font-extrabold transition-all flex items-center justify-center gap-1.5 cursor-pointer font-bold"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>{t("Delete Report")}</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
                     </div>
                   </div>
                 )}

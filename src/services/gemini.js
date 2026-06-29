@@ -149,6 +149,552 @@ export async function chatWithGemini(history) {
 }
 
 /**
+ * Local fallback responder for the Officer Chatbot simulation.
+ */
+function localMockOfficerChatResponder(history, reports) {
+  if (!history || history.length === 0) return "Hello Officer.";
+  const userText = history[history.length - 1].text.toLowerCase();
+  
+  const pendingClaims = reports.filter(r => r.status === 'Pending').length;
+  const inProgressClaims = reports.filter(r => r.status === 'In Progress').length;
+  const resolvedClaims = reports.filter(r => r.status === 'Resolved').length;
+
+  if (userText.includes('priority') || userText.includes('highest')) {
+    const highest = [...reports].sort((a, b) => b.priorityScore - a.priorityScore)[0];
+    if (highest) {
+      return `The highest priority issue currently is "${highest.title}" in ${highest.location} with a safety risk rating of ${highest.priorityScore}/100. Category: ${highest.category}.`;
+    }
+    return "I couldn't find any pending issues in the database right now.";
+  }
+  if (userText.includes('workload') || userText.includes('departments')) {
+    const counts = reports.reduce((acc, r) => {
+      const dept = r.assignedDepartment || 'Unassigned';
+      acc[dept] = (acc[dept] || 0) + 1;
+      return acc;
+    }, {});
+    return `Current workload counts: ` + Object.entries(counts).map(([d, c]) => `${d}: ${c} active issues`).join(', ') + '.';
+  }
+  if (userText.includes('sanitation') || userText.includes('trash') || userText.includes('garbage')) {
+    const sanitationIssues = reports.filter(r => r.category === 'Sanitation' && r.status !== 'Resolved');
+    return `There are currently ${sanitationIssues.length} pending sanitation issues. ` + 
+      (sanitationIssues.length > 0 ? `Nearest one is at "${sanitationIssues[0].location}".` : "The sanitation queue is clear!");
+  }
+  if (userText.includes('summary') || userText.includes('overview')) {
+    return `Jaan Sathi Executive Summary: We have ${reports.length} total registered reports. ${pendingClaims} are awaiting dispatch review, ${inProgressClaims} are actively in progress, and ${resolvedClaims} have been resolved successfully. AI has predicted a high priority for Ward 17.`;
+  }
+  return "I can read your database in real time. Try asking: 'What is the highest priority issue?', 'Show department workloads', 'How many sanitation complaints are pending?', or 'Give me a summary report'.";
+}
+
+/**
+ * Chat with Gemini model for Government Officers, feeding the active reports database as context.
+ */
+export async function officerChatWithGemini(history, reports) {
+  if (isMockGemini || !genAI) {
+    await new Promise(resolve => setTimeout(resolve, 800)); // simulate latency
+    return localMockOfficerChatResponder(history, reports);
+  }
+
+  try {
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-2.5-flash',
+      systemInstruction: `You are the Jaan Sathi Smart Operations Assistant for Municipal Government Officers. 
+Your job is to help officers analyze incoming citizen reports, coordinate dispatches, check workloads, and summarize active city alerts.
+You have real-time access to the active reports database of the city. Use the reports array provided to answer the officer's questions accurately with actual figures and details. 
+Keep your answers brief, analytical, and professional.`
+    });
+
+    const reportsSummary = JSON.stringify(reports.map(r => ({
+      id: r.id.substring(0, 8),
+      title: r.title,
+      category: r.category,
+      status: r.status,
+      severity: r.severity,
+      priorityScore: r.priorityScore,
+      location: r.location,
+      assignedDepartment: r.assignedDepartment || 'Unassigned',
+      date: r.date
+    })));
+
+    const contents = [
+      {
+        role: 'user',
+        parts: [{ text: `Here is the current active municipal reports database: ${reportsSummary}` }]
+      },
+      ...history.map(msg => ({
+        role: msg.role === 'user' ? 'user' : 'model',
+        parts: [{ text: msg.text }]
+      }))
+    ];
+
+    const result = await model.generateContent({ contents });
+    const response = await result.response;
+    return response.text();
+  } catch (error) {
+    console.error("Gemini Officer Chat failed. Falling back to local responder:", error);
+    return localMockOfficerChatResponder(history, reports);
+  }
+}
+
+/**
+ * Local rule-based duplicate classifier fallback.
+ */
+function localMockDuplicateFinder(reports) {
+  if (!reports || reports.length < 2) return [];
+
+  const duplicateGroups = [];
+  const processedIds = new Set();
+
+  for (let i = 0; i < reports.length; i++) {
+    const r1 = reports[i];
+    if (processedIds.has(r1.id) || r1.status === 'Resolved') continue;
+
+    const duplicates = [];
+    const reasonsList = [];
+    const matchingParams = new Set();
+
+    for (let j = i + 1; j < reports.length; j++) {
+      const r2 = reports[j];
+      if (processedIds.has(r2.id) || r2.status === 'Resolved') continue;
+
+      let isDuplicate = false;
+
+      // 1. Check coordinates similarity
+      const hasSameCoords = r1.lat && r2.lat && r1.lng && r2.lng &&
+        Math.abs(r1.lat - r2.lat) < 0.005 &&
+        Math.abs(r1.lng - r2.lng) < 0.005;
+
+      // 2. Check address similarity
+      const hasSameAddress = r1.location && r2.location &&
+        r1.location.toLowerCase().replace(/[\d\s,]/g, '') === r2.location.toLowerCase().replace(/[\d\s,]/g, '');
+
+      // 3. Check category similarity
+      const hasSameCategory = r1.category && r2.category && r1.category === r2.category;
+
+      // 4. Check severity similarity
+      const hasSameSeverity = r1.severity && r2.severity && r1.severity === r2.severity;
+
+      // 5. Check comments signals: >= 3 comments and contains alert keywords
+      const r1Comments = r1.comments || [];
+      const r2Comments = r2.comments || [];
+      const allComments = [...r1Comments, ...r2Comments];
+      const commentsMentioningSameIssue = allComments.filter(c => 
+        /\b(same issue|already reported|duplicate|copy|repost|same problem)\b/i.test(c.text || '')
+      );
+      const hasCommentSignals = commentsMentioningSameIssue.length > 0 && allComments.length >= 3;
+
+      // Duplicate Criteria:
+      // Case A: Coordinates/Address matches AND Category matches
+      if ((hasSameCoords || hasSameAddress) && hasSameCategory) {
+        isDuplicate = true;
+        matchingParams.add("Location Match");
+        matchingParams.add("Category Match");
+        if (hasSameSeverity) matchingParams.add("Severity Match");
+      }
+      // Case B: Comment signals are strong (users flagging duplicate and >=3 comments)
+      else if (hasCommentSignals) {
+        isDuplicate = true;
+        matchingParams.add("Crowdsourced Comments");
+        matchingParams.add("Category Match");
+      }
+      // Case C: Description similarity is extremely high
+      else if (hasSameCategory && r1.description && r2.description) {
+        const words1 = new Set(r1.description.toLowerCase().split(/\s+/).filter(w => w.length > 3));
+        const words2 = new Set(r2.description.toLowerCase().split(/\s+/).filter(w => w.length > 3));
+        const intersection = [...words1].filter(w => words2.has(w));
+        if (intersection.length >= 3) {
+          isDuplicate = true;
+          matchingParams.add("Description Overlap");
+          matchingParams.add("Department Keywords");
+        }
+      }
+
+      if (isDuplicate) {
+        duplicates.push(r2);
+        processedIds.add(r2.id);
+        
+        // Build reasons list
+        if (hasSameCoords || hasSameAddress) {
+          reasonsList.push(`located at the same address/coordinates area (${r1.location})`);
+        }
+        if (hasSameCategory) {
+          reasonsList.push(`classified under the same category (${r1.category})`);
+        }
+        if (hasCommentSignals) {
+          reasonsList.push(`flagged as a duplicate by citizen comments`);
+        }
+        if (matchingParams.has("Description Overlap")) {
+          reasonsList.push("describing identical infrastructure failure descriptors");
+        }
+      }
+    }
+
+    if (duplicates.length > 0) {
+      duplicates.unshift(r1); // Add main report
+      processedIds.add(r1.id);
+
+      duplicateGroups.push({
+        duplicateGroupId: `dup-group-${r1.id}`,
+        issueTitle: r1.title,
+        reportIds: duplicates.map(d => d.id),
+        matchingParameters: Array.from(matchingParams),
+        reason: `These reports match because they are ${reasonsList.length > 0 ? reasonsList.join(" and ") : "reporting the same civic issue at this location"}.`
+      });
+    }
+  }
+
+  return duplicateGroups;
+}
+
+/**
+ * Live Gemini analyzer to group duplicate municipal tickets.
+ */
+export async function findDuplicateReportsWithGemini(reports) {
+  if (isMockGemini || !genAI) {
+    await new Promise(resolve => setTimeout(resolve, 800)); // simulate latency
+    return localMockDuplicateFinder(reports);
+  }
+
+  try {
+    const prompt = `You are the Jaan Sathi Duplicate Classifier Agent. Your task is to analyze the active municipal issues database and cluster reports that represent the exact same physical issue (duplicates).
+    
+For each duplicate group found, provide:
+1. A descriptive title for the issue.
+2. The list of report IDs that are duplicates.
+3. The matching parameters (e.g. "Location Match", "Category Match", "Crowdsourced Comments", "Description Overlap", "Severity Match", "Department Keywords").
+4. A clear reasoning explanation detailing why these reports are duplicates.
+
+Here is the JSON list of active reports:
+${JSON.stringify(reports.map(r => ({
+  id: r.id,
+  title: r.title,
+  description: r.description,
+  category: r.category,
+  severity: r.severity,
+  location: r.location,
+  coordinates: r.lat && r.lng ? { lat: r.lat, lng: r.lng } : null,
+  comments: (r.comments || []).map(c => c.text)
+})))}
+
+Respond with ONLY a clean JSON array of duplicate groups. Each group must be an object with the keys:
+- "duplicateGroupId": string
+- "issueTitle": string
+- "reportIds": string[] (array of report IDs that are duplicates)
+- "matchingParameters": string[]
+- "reason": string
+
+If no duplicate reports are found, return an empty JSON array []. Do not include markdown code block formatting (like \`\`\`json) or any other text.`;
+
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const jsonText = response.text().trim().replace(/^```json\s*|```$/g, '');
+    return JSON.parse(jsonText);
+  } catch (error) {
+    console.error("Gemini Duplicate Classifier failed. Falling back to offline matcher:", error);
+    return localMockDuplicateFinder(reports);
+  }
+}
+
+/**
+ * Local offline rule-based scoring fallback for the predictive risk analyzer.
+ */
+function localMockRiskAnalyzer(reports) {
+  if (!reports || reports.length === 0) return [];
+
+  // 1. Group unresolved reports by department to calculate backlog weights
+  const deptBacklog = reports.reduce((acc, r) => {
+    if (r.status !== 'Resolved') {
+      const dept = r.assignedDepartment || 'Unassigned';
+      acc[dept] = (acc[dept] || 0) + 1;
+    }
+    return acc;
+  }, {});
+
+  // 2. Count reports by date to calculate trend delta
+  const reportsByDate = reports.reduce((acc, r) => {
+    const d = r.date || '2026-06-29';
+    acc[d] = (acc[d] || 0) + 1;
+    return acc;
+  }, {});
+
+  const today = '2026-06-29';
+  const yesterday = '2026-06-28';
+  const todayCount = reportsByDate[today] || 0;
+  const yesterdayCount = reportsByDate[yesterday] || 0;
+  const isTrendIncreasing = todayCount > yesterdayCount;
+
+  return reports.map(r => {
+    let riskScore = 20; // baseline
+    const factors = [];
+    let predictedScenario = "Ongoing localized municipal service interruption.";
+    let preventiveAction = "Schedule routine department maintenance checks.";
+
+    const text = `${r.title} ${r.description} ${r.location}`.toLowerCase();
+
+    // factor A: Proximity to Critical Infrastructure
+    const hasCriticalInfra = /\b(hospital|school|metro|highway|airport|govt|fire|police|electric|power|grid|water plant)\b/i.test(text);
+    if (hasCriticalInfra) {
+      riskScore += 25;
+      factors.push("Critical Infrastructure Proximity");
+    }
+
+    // factor B: Incident Density (similar category nearby < 0.01 degrees ~ 1km)
+    const similarNearby = reports.filter(other => 
+      other.id !== r.id &&
+      other.category === r.category &&
+      other.lat && r.lat &&
+      Math.abs(other.lat - r.lat) < 0.015 &&
+      Math.abs(other.lng - r.lng) < 0.015
+    );
+    if (similarNearby.length > 0) {
+      riskScore += 15;
+      factors.push("High Incident Density");
+    }
+
+    // factor C: Department Backlog Weight
+    const dept = r.assignedDepartment || 'Unassigned';
+    const backlogCount = deptBacklog[dept] || 0;
+    if (backlogCount > 2) {
+      riskScore += 15;
+      factors.push("Department Backlog Escalation");
+    }
+
+    // factor D: Traffic Importance (Transit routes)
+    const isTrafficHazard = /\b(highway|main road|avenue|crossing|traffic|swerve|gridlock|jam)\b/i.test(text);
+    if (isTrafficHazard) {
+      riskScore += 15;
+      factors.push("Transit Traffic Danger");
+    }
+
+    // factor E: SLA timer breach (> 1 day old unresolved)
+    const uploadDate = new Date(r.date || today);
+    const todayDate = new Date(today);
+    const diffDays = Math.floor((todayDate - uploadDate) / (1000 * 60 * 60 * 24));
+    if (diffDays >= 1) {
+      riskScore += 10;
+      factors.push("SLA Timer Breach");
+    }
+
+    // factor F: Trend analysis velocity
+    if (isTrendIncreasing) {
+      riskScore += 10;
+      factors.push("Accelerating Report Velocity");
+    }
+
+    // factor G: Community Verification / Upvotes
+    const upvotesCount = r.pointsEarned || 0;
+    if (upvotesCount > 20) {
+      riskScore += 10;
+      factors.push("High Community Verification");
+    }
+
+    // Cap score at 98
+    riskScore = Math.min(riskScore, 98);
+
+    // Customize predictions based on category
+    if (r.category === 'Sanitation') {
+      predictedScenario = "Uncontrolled sewage blockages will lead to public health hazards and drinking water contamination.";
+      preventiveAction = "Clear municipal drain grates, pump out sludge, and sanitize surrounding residential pathways.";
+    } else if (r.category === 'Roads & Safety') {
+      predictedScenario = "Multiple vehicle collision risks and severe traffic gridlocks on transit highways.";
+      preventiveAction = "Place illuminated warning barriers immediately and dispatch road patch repair teams.";
+    } else if (r.category === 'Infrastructure') {
+      predictedScenario = "Systemic utility collapse causing power blackouts or water delivery pipeline disruptions.";
+      preventiveAction = "Deploy heavy service engineering vehicles to patch primary distribution mains.";
+    }
+
+    return {
+      reportId: r.id,
+      riskScore,
+      triggeredFactors: factors.length > 0 ? factors : ["Routine Priority"],
+      predictedScenario,
+      preventiveAction,
+      reasoning: `Score of ${riskScore}/100 computed based on triggers: ${factors.join(", ") || "standard priority markers"}.`
+    };
+  });
+}
+
+/**
+ * Live Gemini analyzer to calculate risk scores and forecast municipal hazards.
+ */
+export async function analyzePredictiveRisksWithGemini(reports) {
+  if (isMockGemini || !genAI) {
+    await new Promise(resolve => setTimeout(resolve, 800)); // simulate latency
+    return localMockRiskAnalyzer(reports);
+  }
+
+  try {
+    const prompt = `You are the Jaan Sathi Predictive Risk Analyzer Agent. Your task is to calculate a Risk Score (1-100) and forecast municipal hazards for active reports based on:
+1. Incident Density: Cluster of similar nearby issues.
+2. Time Pattern: Escalation (today vs previous days).
+3. Infrastructure Proximity: Proximity to hospitals, schools, metro stations, highways, airports, power plants, etc.
+4. Historical backlog: Escalated value if assigned department has unresolved old reports.
+5. Traffic Importance: Impacts main transit roads.
+6. Environmental factors.
+
+Respond with ONLY a clean JSON array of risk assessments. Each assessment object must have:
+- "reportId": string
+- "riskScore": number (1-100)
+- "triggeredFactors": string[]
+- "predictedScenario": string (what is likely to happen next)
+- "preventiveAction": string (what the government should do before it becomes a major problem)
+- "reasoning": string
+
+Here is the JSON list of active reports:
+${JSON.stringify(reports.map(r => ({
+  id: r.id,
+  title: r.title,
+  description: r.description,
+  category: r.category,
+  severity: r.severity,
+  location: r.location,
+  coordinates: r.lat && r.lng ? { lat: r.lat, lng: r.lng } : null,
+  date: r.date,
+  commentsCount: (r.comments || []).length,
+  assignedDepartment: r.assignedDepartment || 'Unassigned'
+})))}
+
+Respond with ONLY clean JSON array. Do not include markdown code block formatting (like \`\`\`json) or any other text.`;
+
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const jsonText = response.text().trim().replace(/^```json\s*|```$/g, '');
+    return JSON.parse(jsonText);
+  } catch (error) {
+    console.error("Gemini Risk Analyzer failed. Falling back to local offline matcher:", error);
+    return localMockRiskAnalyzer(reports);
+  }
+}
+
+/**
+ * Local offline rule-based scoring fallback for the resource planner.
+ */
+function localMockResourcePlanner(report) {
+  const isCritical = report.severity === 'Critical' || (report.priorityScore && report.priorityScore >= 75);
+
+  let department = "Civic Works Administration";
+  let teamName = "Squad Alpha - Operations";
+  let personnelCount = 5;
+  let equipment = "Standard repair kits, utility vehicles";
+  let estimatedResolutionTime = 12;
+  let estimatedCost = 35000;
+  let priority = report.severity || "Medium";
+  let suggestedStartTime = "09:00 AM";
+  let expectedCompletionTime = "09:00 PM";
+  let confidenceScore = 90;
+  let reasoning = `Standard operational workflow dispatch recommended for category "${report.category}".`;
+  let emergencyActions = [];
+
+  if (isCritical) {
+    department = "Emergency Services & Disaster Management";
+    teamName = "Rapid Tactical Unit 7";
+    personnelCount = 10;
+    equipment = "Disaster rescue gear, emergency response vehicle, heavy earthmovers";
+    estimatedResolutionTime = 4;
+    estimatedCost = 180000;
+    priority = "Critical";
+    suggestedStartTime = "Immediate";
+    expectedCompletionTime = "4 Hours from dispatch";
+    confidenceScore = 95;
+    reasoning = `Incident classified as Critical severity or high threat density. Immediate disaster response team dispatch required.`;
+    emergencyActions = [
+      "Evacuate adjacent structures and set up safety parameter lines.",
+      "Dispatch immediate emergency response vehicles and medical support teams.",
+      "Notify Ward 17 municipal engineers and divert nearby road traffic."
+    ];
+  } else if (report.category === 'Roads & Safety') {
+    department = "Roads & Bridges Department";
+    teamName = "Squad A - Paving Specialists";
+    personnelCount = 8;
+    equipment = "1 Asphalt roller, 1 heavy excavator, barricades";
+    estimatedResolutionTime = 8;
+    estimatedCost = 235000;
+    reasoning = "Road asphalt failure requires excavation, subbase leveling, and hot asphalt paving.";
+  } else if (report.category === 'Sanitation') {
+    department = "Sanitation & Water Board";
+    teamName = "Squad C - Sewer Clearing Crew";
+    personnelCount = 4;
+    equipment = "1 high-pressure vacuum jetting truck, protective suits";
+    estimatedResolutionTime = 6;
+    estimatedCost = 15000;
+    reasoning = "Sewer clog requires high-pressure utility line jetting to clear blockages.";
+  } else if (report.category === 'Infrastructure') {
+    department = "Municipal Electricity & Utility Board";
+    teamName = "Squad D - Power Grid Linemen";
+    personnelCount = 3;
+    equipment = "1 bucket truck, diagnostic electrical rigging tools";
+    estimatedResolutionTime = 10;
+    estimatedCost = 45000;
+    reasoning = "Infrastructure damage requires structural reinforcement and grid connector testing.";
+  }
+
+  return {
+    department,
+    teamName,
+    personnelCount,
+    equipment,
+    estimatedResolutionTime,
+    estimatedCost,
+    priority,
+    suggestedStartTime,
+    expectedCompletionTime,
+    confidenceScore,
+    reasoning,
+    ...(isCritical ? { emergencyActions } : {})
+  };
+}
+
+/**
+ * Live Gemini planner to generate resource allocation recommendations.
+ */
+export async function generateResourcePlanWithGemini(report) {
+  if (isMockGemini || !genAI) {
+    await new Promise(resolve => setTimeout(resolve, 800)); // simulate latency
+    return localMockResourcePlanner(report);
+  }
+
+  try {
+    const isCritical = report.severity === 'Critical' || (report.priorityScore && report.priorityScore >= 75);
+    const prompt = `You are the Jaan Sathi Resource Planner Agent. Your job is to automatically recommend the optimal resources required to resolve a municipal incident.
+    
+Here are the incident details:
+- Title: ${report.title}
+- Description: ${report.description}
+- Category: ${report.category}
+- Severity: ${report.severity}
+- Location: ${report.location}
+- Priority Score: ${report.priorityScore || 40}
+
+Respond with ONLY a clean JSON object containing the recommended plan. The object must contain the following keys:
+- "department": string (e.g. "Road Department", "Sewage Board")
+- "teamName": string (e.g. "Squad A - Maintenance")
+- "personnelCount": number (number of crew members)
+- "equipment": string (equipment/vehicles needed)
+- "estimatedResolutionTime": number (in hours)
+- "estimatedCost": number (in Rupees)
+- "priority": string (e.g. "Low", "Medium", "High", "Critical")
+- "suggestedStartTime": string (e.g. "08:00 AM")
+- "expectedCompletionTime": string (e.g. "04:00 PM")
+- "confidenceScore": number (1-100)
+- "reasoning": string (concise logic)
+${isCritical ? `
+Since this incident is classified as Critical, this must be an Emergency Response Plan. Include emergency response allocations and immediate recommended actions in key "emergencyActions" (array of strings).` : ''}
+
+Respond with ONLY a clean JSON object. Do not include markdown code block formatting (like \`\`\`json) or any other text.`;
+
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const jsonText = response.text().trim().replace(/^```json\s*|```$/g, '');
+    return JSON.parse(jsonText);
+  } catch (error) {
+    console.error("Gemini Resource Planner failed. Falling back to local matcher:", error);
+    return localMockResourcePlanner(report);
+  }
+}
+
+/**
  * Translates a given text string into the target language using Gemini.
  */
 export async function translateTextWithGemini(text, targetLang) {

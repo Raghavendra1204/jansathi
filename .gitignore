@@ -23,10 +23,18 @@ dist-ssr
 *.sln
 *.sw?
 
-# Firebase Keys
+# Firebase Keys & Credentials
 firebase-key.json
 firebase-key.json.json
 .firebaserc.local
+serviceAccountKey.json
+*-firebase-adminsdk-*.json
+firebase-debug.log
+.firebase/
 
 # Local Environment Variables
 .env
+.env.*
+.env.local
+.env.development
+.env.production

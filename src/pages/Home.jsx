@@ -2,12 +2,12 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { 
-  fetchReports, voteReport, addComment, fetchTopHeroes, updateReport, updateComment 
+  fetchReports, voteReport, addComment, fetchTopHeroes, updateReport, updateComment, deleteReport 
 } from '../services/api';
 import { 
   ChevronUp, ChevronDown, MessageSquare, Share2, 
   MapPin, AlertCircle, Award, Sparkles, Send, 
-  User, CheckCircle2, Landmark, ShieldAlert, Edit3, X 
+  User, CheckCircle2, Landmark, ShieldAlert, Edit3, X, Trash2 
 } from 'lucide-react';
 import { formatDate, formatCompactNumber } from '../utils/helpers';
 import { useTranslation } from '../context/TranslationContext';
@@ -281,6 +281,18 @@ export default function Home() {
       triggerToast(t('Comment updated successfully!'));
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleDeleteReport = async (reportId) => {
+    if (!window.confirm(t('Are you sure you want to delete this civic report? This action cannot be undone.'))) return;
+    try {
+      await deleteReport(reportId);
+      setReports(prev => prev.filter(r => r.id !== reportId));
+      triggerToast(t('Report deleted successfully!'));
+    } catch (err) {
+      console.error("Failed to delete report:", err);
+      triggerToast(t('Failed to delete report.'));
     }
   };
 
@@ -563,22 +575,34 @@ export default function Home() {
                           <span>{t("Share")}</span>
                         </button>
 
-                        {/* Edit Button for report owner */}
-                        {user && report.userId === user.uid && report.status !== 'Resolved' && (
-                          <button
-                            onClick={() => {
-                              setEditingReport(report);
-                              setEditTitle(report.title);
-                              setEditCategory(report.category);
-                              setEditLocation(report.location);
-                              setEditSeverity(report.severity || 'Low');
-                              setEditDescription(report.description);
-                            }}
-                            className="flex items-center gap-1.5 text-blue-400 hover:text-blue-300 transition-colors cursor-pointer ml-auto"
-                          >
-                            <Edit3 className="w-4 h-4" />
-                            <span>{t("Edit")}</span>
-                          </button>
+                        {/* Edit & Delete Buttons for report owner */}
+                        {user && report.userId === user.uid && (
+                          <div className="flex items-center gap-3.5 ml-auto">
+                            {report.status !== 'Resolved' && (
+                              <button
+                                onClick={() => {
+                                  setEditingReport(report);
+                                  setEditTitle(report.title);
+                                  setEditCategory(report.category);
+                                  setEditLocation(report.location);
+                                  setEditSeverity(report.severity || 'Low');
+                                  setEditDescription(report.description);
+                                }}
+                                className="flex items-center gap-1.5 text-blue-450 hover:text-blue-350 transition-colors cursor-pointer"
+                              >
+                                <Edit3 className="w-4 h-4" />
+                                <span>{t("Edit")}</span>
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleDeleteReport(report.id)}
+                              className="flex items-center gap-1.5 text-rose-455 hover:text-rose-350 transition-colors cursor-pointer"
+                              title={t("Delete Report")}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              <span>{t("Delete")}</span>
+                            </button>
+                          </div>
                         )}
                       </div>
 

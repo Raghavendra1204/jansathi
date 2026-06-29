@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
+import OfficerSidebar from './components/OfficerSidebar';
+import { useAuth } from './hooks/useAuth';
 import Home from './pages/Home';
 import Explore from './pages/Explore';
 import Profile from './pages/Profile';
@@ -15,6 +17,7 @@ import NotificationDrawer from './components/NotificationDrawer';
 import { TranslationProvider } from './context/TranslationContext';
 
 export default function App() {
+  const { user } = useAuth();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [theme, setTheme] = useState('dark');
 
@@ -64,7 +67,7 @@ export default function App() {
         theme === 'light' ? 'bg-slate-50 text-slate-900' : 'bg-[#0b0f19] text-slate-100'
       }`}>
         {/* Responsive Dashboard Sidebar */}
-        <Sidebar />
+        {user?.role === 'officer' ? <OfficerSidebar /> : <Sidebar />}
 
         {/* Floating AI Assistant Chatbot */}
         <Chatbot />

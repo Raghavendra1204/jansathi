@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { formatDate } from '../utils/helpers';
 import { 
-  fetchNotifications, fetchDocuments, uploadDocument, deleteDocument, updateUserProfile, addNotification, logUserActivity, fetchMissions, fetchReports, updateReport 
+  fetchNotifications, fetchDocuments, uploadDocument, deleteDocument, updateUserProfile, addNotification, logUserActivity, fetchMissions, fetchReports, updateReport, deleteReport 
 } from '../services/api';
 import { useTranslation } from '../context/TranslationContext';
 import { isMockFirebase } from '../firebase/config';
@@ -173,6 +173,19 @@ export default function Profile() {
       triggerErrorAlert('Failed to update post.');
     } finally {
       setUpdatingReportLoading(false);
+    }
+  };
+
+  const handleDeleteReport = async (reportId) => {
+    if (!window.confirm(t('Are you sure you want to delete this civic report? This action cannot be undone.'))) return;
+    try {
+      await deleteReport(reportId);
+      setMyReports(prev => prev.filter(r => r.id !== reportId));
+      triggerSuccessAlert(t('Post deleted successfully!'));
+      window.dispatchEvent(new Event('mock-auth-state-change'));
+    } catch (err) {
+      console.error(err);
+      triggerErrorAlert(t('Failed to delete post.'));
     }
   };
 
@@ -908,14 +921,12 @@ export default function Profile() {
                           </span>
                         )}
                       </div>
-                    </div>
-
-                    <div className="flex gap-2.5 pt-4 border-t border-slate-900/40 mt-4">
+                               <div className="flex gap-2 pt-4 border-t border-slate-900/40 mt-4 flex-wrap">
                       <Link 
                         to={`/report/${report.id}`} 
-                        className="flex-1 py-1.5 bg-slate-900 border border-slate-800 hover:bg-slate-850 text-slate-350 hover:text-white rounded-xl text-[10px] font-bold transition-all text-center"
+                        className="flex-1 min-w-[70px] py-1.5 bg-slate-900 border border-slate-800 hover:bg-slate-850 text-slate-350 hover:text-white rounded-xl text-[10px] font-bold transition-all text-center"
                       >
-                        {t("View Details")}
+                        {t("View")}
                       </Link>
                       
                       {report.status !== 'Resolved' && (
@@ -928,12 +939,19 @@ export default function Profile() {
                             setEditSeverity(report.severity || 'Low');
                             setEditDescription(report.description);
                           }}
-                          className="flex-1 py-1.5 bg-blue-600/10 border border-blue-900/30 hover:bg-blue-600 hover:text-white text-blue-400 rounded-xl text-[10px] font-bold transition-all cursor-pointer"
+                          className="flex-1 min-w-[70px] py-1.5 bg-blue-600/10 border border-blue-900/30 hover:bg-blue-600 hover:text-white text-blue-400 rounded-xl text-[10px] font-bold transition-all cursor-pointer"
                         >
                           {t("Edit")}
                         </button>
                       )}
-                    </div>
+
+                      <button
+                        onClick={() => handleDeleteReport(report.id)}
+                        className="flex-1 min-w-[70px] py-1.5 bg-rose-600/15 border border-rose-900/30 hover:bg-rose-600 hover:text-white text-rose-455 rounded-xl text-[10px] font-bold transition-all cursor-pointer"
+                      >
+                        {t("Delete")}
+                      </button>
+                    </div>           </div>
                   </div>
                 ))}
               </div>

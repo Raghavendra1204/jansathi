@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { 
   ShieldAlert, Clock, CheckCircle2, Users, MapPin, AlertCircle, AlertTriangle, 
   Check, Loader, Search, Filter, ArrowUpDown, ChevronRight, X, Sparkles, Send, 
   Download, BarChart3, Activity, ShieldCheck, Mail, SendToBack, FileText, 
-  BrainCircuit, ThumbsUp, Calendar, Trash
+  BrainCircuit, ThumbsUp, Calendar, Trash, ArrowLeft, Cpu, TrendingUp, CheckCircle, ArrowRight
 } from 'lucide-react';
 import { formatDate } from '../utils/helpers';
 import { fetchReports, addNotification, logUserActivity, updateUserProfile, fetchDocuments, reviewDocument } from '../services/api';
@@ -13,27 +13,177 @@ import { doc, updateDoc, setDoc, getDoc, collection, onSnapshot, query, orderBy 
 import { db, isMockFirebase } from '../firebase/config';
 import { useTranslation } from '../context/TranslationContext';
 import SeverityBadge from '../components/SeverityBadge';
+import { officerChatWithGemini, findDuplicateReportsWithGemini, analyzePredictiveRisksWithGemini, generateResourcePlanWithGemini } from '../services/gemini';
 
 // Hardcoded default fallback reports for mock mode
-const INITIAL_MOCK_REPORTS = [];
+const INITIAL_MOCK_REPORTS = [
+  {
+    id: 'rep-dup-01',
+    title: 'Broken Streetlight pole #12',
+    category: 'Infrastructure',
+    location: '405 Pine Street, Downtown',
+    date: '2026-06-28',
+    status: 'Pending',
+    description: 'Streetlight pole #12 is completely dark, causing safety concerns for pedestrians at night.',
+    pointsEarned: 0,
+    severity: 'Medium',
+    priorityScore: 35,
+    assignedDepartment: 'Electricity Board',
+    imageUrl: 'https://images.unsplash.com/photo-1485088478149-6e44b2fa7f4f?auto=format&fit=crop&q=80&w=800',
+    lat: 12.9784,
+    lng: 77.5906,
+    comments: [
+      { id: 'c1', userName: 'Rajesh Kumar', text: 'Street is pitch black here, very dangerous.' }
+    ]
+  },
+  {
+    id: 'rep-dup-02',
+    title: 'Dark streetlight at 405 Pine',
+    category: 'Infrastructure',
+    location: '405 Pine Street, Downtown',
+    date: '2026-06-29',
+    status: 'Pending',
+    description: 'The streetlight bulb is broken and street is completely dark near 405 Pine.',
+    pointsEarned: 0,
+    severity: 'Medium',
+    priorityScore: 30,
+    assignedDepartment: 'Electricity Board',
+    imageUrl: 'https://images.unsplash.com/photo-1485088478149-6e44b2fa7f4f?auto=format&fit=crop&q=80&w=800',
+    lat: 12.9784,
+    lng: 77.5906,
+    comments: [
+      { id: 'c2', userName: 'Anil Mehta', text: 'This is the same issue already reported under pole #12.' },
+      { id: 'c3', userName: 'Suman G.', text: 'Yes, same streetlight issue.' },
+      { id: 'c4', userName: 'Priya K.', text: 'Please merge this, it is a duplicate post.' }
+    ]
+  },
+  {
+    id: 'rep-dup-03',
+    title: 'Water Pipe Leakage on Broadway Ave',
+    category: 'Infrastructure',
+    location: '1200 Broadway Ave',
+    date: '2026-06-28',
+    status: 'Pending',
+    description: 'Water is gushing out from a cracked underground utility pipe on Broadway Ave.',
+    pointsEarned: 0,
+    severity: 'High',
+    priorityScore: 68,
+    assignedDepartment: 'Water Board',
+    imageUrl: 'https://images.unsplash.com/photo-1515162305285-0293e4767cc2?auto=format&fit=crop&q=80&w=800',
+    lat: 12.9716,
+    lng: 77.5946,
+    comments: []
+  },
+  {
+    id: 'rep-dup-04',
+    title: 'Water Pipe Crack on Broadway',
+    category: 'Infrastructure',
+    location: '1200 Broadway Ave',
+    date: '2026-06-29',
+    status: 'Pending',
+    description: 'Cracked water line gushing water on Broadway road.',
+    pointsEarned: 0,
+    severity: 'High',
+    priorityScore: 65,
+    assignedDepartment: 'Water Board',
+    imageUrl: 'https://images.unsplash.com/photo-1515162305285-0293e4767cc2?auto=format&fit=crop&q=80&w=800',
+    lat: 12.9716,
+    lng: 77.5946,
+    comments: []
+  }
+];
 
 export default function OfficerDashboard() {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { t } = useTranslation();
 
-  // Tab State: 'command-center' | 'queue' | 'agents' | 'analytics' | 'profile'
-  const [activeTab, setActiveTab] = useState('command-center');
+  const tabParam = searchParams.get('tab');
+  const filterParam = searchParams.get('filter');
+
+  // Tab State: 'command-center' | 'queue' | 'agents' | 'analytics' | 'profile' | 'verification'
+  const [activeTab, setActiveTab] = useState(tabParam || 'command-center');
   
   // Incident Data State
   const [reports, setReports] = useState([]);
   const [loadingReports, setLoadingReports] = useState(true);
   const [selectedReport, setSelectedReport] = useState(null);
+  const [mapLoading, setMapLoading] = useState(!window.L);
+  const detailMapRef = useRef(null);
+  const detailMapInstance = useRef(null);
+
+  useEffect(() => {
+    if (window.L) {
+      setMapLoading(false);
+      return;
+    }
+
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(link);
+
+    const script = document.createElement('script');
+    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    script.async = true;
+    script.onload = () => {
+      setMapLoading(false);
+    };
+    script.onerror = () => {
+      console.error("Failed to load mapping library.");
+      setMapLoading(false);
+    };
+    document.body.appendChild(script);
+  }, []);
   
   // Table Interactions State
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [categoryFilter, setCategoryFilter] = useState('All');
+  const [severityFilter, setSeverityFilter] = useState('All');
+  const [assignedMeFilter, setAssignedMeFilter] = useState(false);
+
+  // Synchronize Tab and Filter states with URL Search Parameters
+  useEffect(() => {
+    if (tabParam) {
+      setActiveTab(tabParam);
+    }
+  }, [tabParam]);
+
+  useEffect(() => {
+    if (filterParam) {
+      if (filterParam === 'New') {
+        setStatusFilter('Submitted');
+        setSeverityFilter('All');
+        setAssignedMeFilter(false);
+      } else if (filterParam === 'Pending') {
+        setStatusFilter('Pending');
+        setSeverityFilter('All');
+        setAssignedMeFilter(false);
+      } else if (filterParam === 'InProgress') {
+        setStatusFilter('In Progress');
+        setSeverityFilter('All');
+        setAssignedMeFilter(false);
+      } else if (filterParam === 'Resolved') {
+        setStatusFilter('Resolved');
+        setSeverityFilter('All');
+        setAssignedMeFilter(false);
+      } else if (filterParam === 'Critical') {
+        setStatusFilter('All');
+        setSeverityFilter('Critical');
+        setAssignedMeFilter(false);
+      } else if (filterParam === 'AssignedMe') {
+        setStatusFilter('All');
+        setSeverityFilter('All');
+        setAssignedMeFilter(true);
+      }
+    } else {
+      setStatusFilter('All');
+      setSeverityFilter('All');
+      setAssignedMeFilter(false);
+    }
+  }, [filterParam]);
   const [prioritySort, setPrioritySort] = useState('desc'); // 'desc' | 'asc'
   const [currentPage, setCurrentPage] = useState(1);
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
@@ -100,6 +250,287 @@ export default function OfficerDashboard() {
       setErrorMsg("Failed to submit review.");
     } finally {
       setReviewSubmitting(false);
+    }
+  };
+
+  // Duplicate Classifier States (Agent 2)
+  const [duplicateGroups, setDuplicateGroups] = useState([]);
+  const [classifierRunning, setClassifierRunning] = useState(false);
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [mergingSubmitting, setMergingSubmitting] = useState(false);
+
+  const runDuplicateClassifier = async () => {
+    setClassifierRunning(true);
+    try {
+      const groups = await findDuplicateReportsWithGemini(reports);
+      setDuplicateGroups(groups);
+      setShowDuplicateModal(true);
+    } catch (err) {
+      console.error(err);
+      setErrorMsg("Failed to run duplicate classifier scanner.");
+    } finally {
+      setClassifierRunning(false);
+    }
+  };
+
+  const handleMergeReports = async (primaryId, duplicateIds, reason) => {
+    setMergingSubmitting(true);
+    try {
+      if (isMockFirebase) {
+        const stored = JSON.parse(localStorage.getItem('jaan_sathi_reports') || '[]');
+        const updated = stored.map(r => {
+          if (duplicateIds.includes(r.id) && r.id !== primaryId) {
+            return {
+              ...r,
+              status: 'Resolved',
+              officerNote: `Merged as duplicate of ticket ${primaryId.substring(0, 8)}. Reason: ${reason}`
+            };
+          }
+          return r;
+        });
+        localStorage.setItem('jaan_sathi_reports', JSON.stringify(updated));
+        setReports(updated);
+      } else {
+        // Production Firestore updates
+        for (const dupId of duplicateIds) {
+          if (dupId === primaryId) continue;
+          await updateDoc(doc(db, 'reports', dupId), {
+            status: 'Resolved',
+            officerNote: `Merged as duplicate of ticket ${primaryId.substring(0, 8)}. Reason: ${reason}`
+          });
+        }
+      }
+      setSuccessMsg("Tickets successfully merged and resolved.");
+      setShowDuplicateModal(false);
+      
+      // Notify components to update
+      window.dispatchEvent(new Event('refresh-reports'));
+    } catch (err) {
+      console.error(err);
+      setErrorMsg("Failed to merge duplicate tickets.");
+    } finally {
+      setMergingSubmitting(false);
+    }
+  };
+
+  // Predictive Risk States (Agent 4)
+  const [predictiveRisks, setPredictiveRisks] = useState([]);
+  const [riskAnalyzerRunning, setRiskAnalyzerRunning] = useState(false);
+  const [showRiskModal, setShowRiskModal] = useState(false);
+
+  const runRiskAnalyzer = async () => {
+    setRiskAnalyzerRunning(true);
+    try {
+      const assessments = await analyzePredictiveRisksWithGemini(reports);
+      setPredictiveRisks(assessments);
+      setShowRiskModal(true);
+    } catch (err) {
+      console.error(err);
+      setErrorMsg("Failed to run predictive risk analyzer scanner.");
+    } finally {
+      setRiskAnalyzerRunning(false);
+    }
+  };
+
+  const handleResolveReportFromRisk = async (reportId) => {
+    try {
+      if (isMockFirebase) {
+        const stored = JSON.parse(localStorage.getItem('jaan_sathi_reports') || '[]');
+        const idx = stored.findIndex(r => r.id === reportId);
+        if (idx !== -1) {
+          stored[idx].status = 'Resolved';
+          stored[idx].resolvedDate = new Date().toISOString().split('T')[0];
+          stored[idx].resolvedBy = user.name;
+          stored[idx].officerNote = "Resolved via Predictive Risk Intelligence Console action.";
+          localStorage.setItem('jaan_sathi_reports', JSON.stringify(stored));
+          setReports(stored);
+        }
+      } else {
+        await updateDoc(doc(db, 'reports', reportId), {
+          status: 'Resolved',
+          resolvedDate: new Date().toISOString().split('T')[0],
+          resolvedBy: user.name,
+          officerNote: "Resolved via Predictive Risk Intelligence Console action."
+        });
+      }
+      setSuccessMsg("Issue resolved successfully.");
+
+      setPredictiveRisks(prev => prev.map(risk => {
+        if (risk.reportId === reportId) {
+          return {
+            ...risk,
+            riskScore: 0,
+            triggeredFactors: ["Issue Resolved"]
+          };
+        }
+        return risk;
+      }));
+
+      window.dispatchEvent(new Event('refresh-reports'));
+    } catch (err) {
+      console.error(err);
+      setErrorMsg("Failed to resolve issue.");
+    }
+  };
+
+  // Resource Planner States (Agent 3)
+  const [showPlannerModal, setShowPlannerModal] = useState(false);
+  const [plannerSelectedReport, setPlannerSelectedReport] = useState(null);
+  const [plannerReportPlan, setPlannerReportPlan] = useState(null);
+  const [plannerLoading, setPlannerLoading] = useState(false);
+  const [plannerFilter, setPlannerFilter] = useState('Pending'); // 'Pending', 'Approved', 'Emergency'
+  const [plannerSortBy, setPlannerSortBy] = useState('RiskScore'); // 'RiskScore', 'Priority', 'Cost', 'Time', 'Department'
+  const [editPlanMode, setEditPlanMode] = useState(false);
+  const [editPlanData, setEditPlanData] = useState({});
+
+  const loadResourcePlanForReport = async (report) => {
+    setPlannerLoading(true);
+    setEditPlanMode(false);
+    try {
+      const plan = await generateResourcePlanWithGemini(report);
+      setPlannerReportPlan(plan);
+      setPlannerSelectedReport(report);
+      setEditPlanData({
+        personnelCount: plan.personnelCount,
+        department: plan.department,
+        estimatedCost: plan.estimatedCost,
+        expectedCompletionTime: plan.expectedCompletionTime,
+        priority: plan.priority,
+        remarks: ''
+      });
+    } catch (err) {
+      console.error(err);
+      setErrorMsg("Failed to load resource plan recommendation.");
+    } finally {
+      setPlannerLoading(false);
+    }
+  };
+
+  const handleApproveResourcePlan = async (report, plan, isEmergency = false) => {
+    try {
+      const timestamp = new Date().toLocaleString();
+      const approvedPlan = {
+        ...plan,
+        department: editPlanData.department || plan.department,
+        personnelCount: parseInt(editPlanData.personnelCount) || plan.personnelCount,
+        estimatedCost: parseFloat(editPlanData.estimatedCost) || plan.estimatedCost,
+        expectedCompletionTime: editPlanData.expectedCompletionTime || plan.expectedCompletionTime,
+        priority: editPlanData.priority || plan.priority,
+        approvedAt: timestamp,
+        approvalType: isEmergency ? 'Emergency Response' : 'Standard Plan',
+        officerRemarks: editPlanData.remarks || 'None'
+      };
+
+      if (isMockFirebase) {
+        const stored = JSON.parse(localStorage.getItem('jaan_sathi_reports') || '[]');
+        const idx = stored.findIndex(r => r.id === report.id);
+        if (idx !== -1) {
+          stored[idx].status = 'Resources Assigned';
+          stored[idx].assignedDepartment = approvedPlan.department;
+          stored[idx].assignedTeam = approvedPlan.teamName;
+          stored[idx].resourcePlan = approvedPlan;
+          stored[idx].officerNote = `Resource plan approved at ${timestamp} by ${user.name}. Cost: ₹${approvedPlan.estimatedCost.toLocaleString()}. Team: ${approvedPlan.teamName}. Remarks: ${approvedPlan.officerRemarks}`;
+          localStorage.setItem('jaan_sathi_reports', JSON.stringify(stored));
+          setReports(stored);
+        }
+
+        // Add to activity logs
+        const logs = JSON.parse(localStorage.getItem('jaan_sathi_activity_logs') || '[]');
+        logs.unshift({
+          id: `log-${Date.now()}`,
+          userId: user.uid,
+          userName: user.name,
+          action: 'Approve Resource Plan',
+          details: `Approved resource allocation plan for "${report.title}" under ${approvedPlan.department}`,
+          timestamp
+        });
+        localStorage.setItem('jaan_sathi_activity_logs', JSON.stringify(logs));
+
+        // Notify reporting citizen
+        const notifications = JSON.parse(localStorage.getItem('jaan_sathi_notifications') || '[]');
+        notifications.unshift({
+          id: `notif-${Date.now()}`,
+          userId: report.userId || 'citizen_user',
+          title: 'Resources Allocated to Your Report!',
+          message: `The ${approvedPlan.department} has assigned ${approvedPlan.teamName} to fix "${report.title}". Estimated resolution: ${approvedPlan.estimatedResolutionTime || 8} Hours.`,
+          timestamp,
+          read: false
+        });
+        localStorage.setItem('jaan_sathi_notifications', JSON.stringify(notifications));
+      } else {
+        // Production Firestore updates
+        const docRef = doc(db, 'reports', report.id);
+        await updateDoc(docRef, {
+          status: 'Resources Assigned',
+          assignedDepartment: approvedPlan.department,
+          assignedTeam: approvedPlan.teamName,
+          resourcePlan: approvedPlan,
+          officerNote: `Resource plan approved at ${timestamp} by ${user.name}. Cost: ₹${approvedPlan.estimatedCost.toLocaleString()}. Team: ${approvedPlan.teamName}. Remarks: ${approvedPlan.officerRemarks}`
+        });
+
+        // Add activity log and notification via Firestore
+        await addDoc(collection(db, 'activity_logs'), {
+          userId: user.uid,
+          userName: user.name,
+          action: 'Approve Resource Plan',
+          details: `Approved resource allocation plan for "${report.title}" under ${approvedPlan.department}`,
+          timestamp
+        });
+        await addDoc(collection(db, 'notifications'), {
+          userId: report.userId || 'citizen_user',
+          title: 'Resources Allocated to Your Report!',
+          message: `The ${approvedPlan.department} has assigned ${approvedPlan.teamName} to fix "${report.title}". Estimated resolution: ${approvedPlan.estimatedResolutionTime || 8} Hours.`,
+          timestamp,
+          read: false
+        });
+      }
+
+      setSuccessMsg(isEmergency ? "Emergency response successfully approved!" : "Resource plan successfully approved!");
+      setShowPlannerModal(false);
+
+      // Redirect officer to Incident Queue & Highlight it!
+      setActiveTab('queue');
+      const refreshedReport = {
+        ...report,
+        status: 'Resources Assigned',
+        assignedDepartment: approvedPlan.department,
+        assignedTeam: approvedPlan.teamName,
+        resourcePlan: approvedPlan
+      };
+      setSelectedReport(refreshedReport);
+
+      // Sync event
+      window.dispatchEvent(new Event('refresh-reports'));
+    } catch (err) {
+      console.error(err);
+      setErrorMsg("Failed to approve resource plan.");
+    }
+  };
+
+  const handleRejectResourcePlan = async (report) => {
+    try {
+      const timestamp = new Date().toLocaleString();
+      if (isMockFirebase) {
+        const stored = JSON.parse(localStorage.getItem('jaan_sathi_reports') || '[]');
+        const idx = stored.findIndex(r => r.id === report.id);
+        if (idx !== -1) {
+          stored[idx].status = 'Pending';
+          stored[idx].resourcePlan = { rejected: true, rejectedAt: timestamp, rejectedRemarks: editPlanData.remarks || 'None' };
+          localStorage.setItem('jaan_sathi_reports', JSON.stringify(stored));
+          setReports(stored);
+        }
+      } else {
+        const docRef = doc(db, 'reports', report.id);
+        await updateDoc(docRef, {
+          resourcePlan: { rejected: true, rejectedAt: timestamp, rejectedRemarks: editPlanData.remarks || 'None' }
+        });
+      }
+      setSuccessMsg("Resource plan rejected.");
+      setShowPlannerModal(false);
+      window.dispatchEvent(new Event('refresh-reports'));
+    } catch (err) {
+      console.error(err);
+      setErrorMsg("Failed to reject plan.");
     }
   };
 
@@ -212,7 +643,7 @@ export default function OfficerDashboard() {
 
   // Leaflet Map Initialization & Sync
   useEffect(() => {
-    if (activeTab !== 'command-center' || !mapRef.current || loadingReports) return;
+    if (activeTab !== 'command-center' || !mapRef.current || loadingReports || mapLoading) return;
 
     const L = window.L;
     if (!L) return;
@@ -278,7 +709,7 @@ export default function OfficerDashboard() {
       markersRef.current.push(marker);
     });
 
-  }, [activeTab, reports, loadingReports]);
+  }, [activeTab, reports, loadingReports, mapLoading]);
 
   // Sync details fields when selecting different reports
   useEffect(() => {
@@ -287,6 +718,74 @@ export default function OfficerDashboard() {
       setActionStaff(selectedReport.assignedStaff || '');
       setResolutionNotes(selectedReport.resolutionNotes || '');
       setResolutionImage(selectedReport.resolutionImage || '');
+    }
+  }, [selectedReport]);
+
+  // Details Map rendering logic
+  useEffect(() => {
+    if (!selectedReport || !detailMapRef.current || mapLoading || !window.L) return;
+
+    const L = window.L;
+    let dMap = detailMapInstance.current;
+    const center = [selectedReport.lat || 12.9716, selectedReport.lng || 77.5946];
+
+    if (!dMap) {
+      const isLight = document.documentElement.classList.contains('light');
+      const tileUrl = isLight 
+        ? 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
+        : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+
+      dMap = L.map(detailMapRef.current, {
+        zoomControl: true,
+        attributionControl: false
+      }).setView(center, 14);
+
+      L.tileLayer(tileUrl, {
+        maxZoom: 20
+      }).addTo(dMap);
+
+      detailMapInstance.current = dMap;
+    } else {
+      dMap.setView(center, 14);
+    }
+
+    // Add marker
+    const color = selectedReport.severity === 'Critical' ? '#f43f5e' :
+                  selectedReport.severity === 'High' ? '#f59e0b' :
+                  selectedReport.severity === 'Medium' ? '#3b82f6' : '#64748b';
+
+    const markerHtml = `
+      <div style="position: relative; width: 24px; height: 24px;">
+        <span class="animate-ping" style="position: absolute; top: 0; left: 0; display: inline-flex; width: 100%; height: 100%; border-radius: 50%; background-color: ${color}; opacity: 0.45; animation-duration: 1.5s;"></span>
+        <span style="position: relative; display: block; width: 12px; height: 12px; margin: 6px; border-radius: 50%; background-color: ${color}; border: 2px solid #ffffff; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.15);"></span>
+      </div>
+    `;
+
+    const customIcon = L.divIcon({
+      html: markerHtml,
+      className: 'custom-detail-map-marker',
+      iconSize: [24, 24],
+      iconAnchor: [12, 12]
+    });
+
+    // Clear previous layers/markers
+    dMap.eachLayer((layer) => {
+      if (layer instanceof L.Marker) {
+        dMap.removeLayer(layer);
+      }
+    });
+
+    L.marker(center, { icon: customIcon }).addTo(dMap);
+
+  }, [selectedReport, mapLoading]);
+
+  // Clean up details map when closed
+  useEffect(() => {
+    if (!selectedReport) {
+      if (detailMapInstance.current) {
+        detailMapInstance.current.remove();
+        detailMapInstance.current = null;
+      }
     }
   }, [selectedReport]);
 
@@ -421,7 +920,6 @@ export default function OfficerDashboard() {
     }
   };
 
-  // --- SEARCH, FILTERS, PAGINATION GRID LOGIC ---
   const filteredReports = reports.filter(r => {
     const matchesSearch = r.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           r.description.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -429,13 +927,17 @@ export default function OfficerDashboard() {
                           r.id.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'All' || r.status === statusFilter;
     const matchesCategory = categoryFilter === 'All' || r.category === categoryFilter;
+    const matchesSeverity = severityFilter === 'All' || r.severity === severityFilter;
+    const matchesAssigned = assignedMeFilter 
+      ? (r.assignedOfficer === (user?.name || '') || (!r.assignedOfficer && (user?.name || ''))) 
+      : true;
     
     let matchesDate = true;
     if (dateRange.start && dateRange.end) {
       matchesDate = r.date >= dateRange.start && r.date <= dateRange.end;
     }
 
-    return matchesSearch && matchesStatus && matchesCategory && matchesDate;
+    return matchesSearch && matchesStatus && matchesCategory && matchesSeverity && matchesAssigned && matchesDate;
   });
 
   const sortedReports = [...filteredReports].sort((a, b) => {
@@ -464,43 +966,21 @@ export default function OfficerDashboard() {
     if (!chatInput.trim()) return;
 
     const userText = chatInput.trim();
-    setChatMessages(prev => [...prev, { role: 'user', text: userText }]);
+    const updatedMessages = [...chatMessages, { role: 'user', text: userText }];
+    
+    setChatMessages(updatedMessages);
     setChatInput('');
     setChatLoading(true);
 
-    setTimeout(() => {
-      const query = userText.toLowerCase();
-      let responseText = '';
-
-      if (query.includes('priority') || query.includes('highest')) {
-        const highest = [...reports].sort((a, b) => b.priorityScore - a.priorityScore)[0];
-        if (highest) {
-          responseText = `The highest priority issue currently is "${highest.title}" in ${highest.location} with a safety risk rating of ${highest.priorityScore}/100. Category: ${highest.category}.`;
-        } else {
-          responseText = "I couldn't find any pending issues in the database right now.";
-        }
-      } else if (query.includes('workload') || query.includes('departments')) {
-        const counts = reports.reduce((acc, r) => {
-          const dept = r.assignedDepartment || 'Unassigned';
-          acc[dept] = (acc[dept] || 0) + 1;
-          return acc;
-        }, {});
-        
-        responseText = `Current workload counts: ` + Object.entries(counts)
-          .map(([d, c]) => `${d}: ${c} active issues`).join(', ') + '.';
-      } else if (query.includes('sanitation') || query.includes('trash') || query.includes('garbage')) {
-        const sanitationIssues = reports.filter(r => r.category === 'Sanitation' && r.status !== 'Resolved');
-        responseText = `There are currently ${sanitationIssues.length} pending sanitation issues. ` + 
-          (sanitationIssues.length > 0 ? `Nearest one is at "${sanitationIssues[0].location}".` : "The sanitation queue is clear!");
-      } else if (query.includes('summary') || query.includes('overview')) {
-        responseText = `Jaan Sathi Executive Summary: We have ${reports.length} total registered reports. ${pendingClaims} are awaiting dispatch review, ${inProgressClaims} are actively in progress, and ${resolvedClaims} have been resolved successfully. AI has predicted a high priority for Ward 17.`;
-      } else {
-        responseText = "I can read your database in real time. Try asking: 'What is the highest priority issue?', 'Show department workloads', 'How many sanitation complaints are pending?', or 'Give me a summary report'.";
-      }
-
+    try {
+      const responseText = await officerChatWithGemini(updatedMessages, reports);
       setChatMessages(prev => [...prev, { role: 'assistant', text: responseText }]);
+    } catch (err) {
+      console.error("Failed to query Gemini assistant:", err);
+      setChatMessages(prev => [...prev, { role: 'assistant', text: "Sorry, I am having trouble connecting to Jaan Sathi Operations helper." }]);
+    } finally {
       setChatLoading(false);
-    }, 600);
+    }
   };
 
   // --- EXECUTIVE REPORT PDF GENERATOR (Agent 9) ---
@@ -934,26 +1414,28 @@ export default function OfficerDashboard() {
               )}
             </div>
           )}
-
-          {/* --- SIDE DETAILS DRAWER PANE --- */}
+          {/* --- FULL SCREEN DETAILS PANEL --- */}
           {selectedReport && (
-            <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/60 backdrop-blur-sm animate-fade-in">
-              <div 
-                className="fixed inset-0 cursor-pointer"
-                onClick={() => setSelectedReport(null)}
-              />
+            <div className="fixed inset-0 z-50 bg-[#080c14] flex flex-col animate-fade-in overflow-hidden">
               
-              <div className="glass w-full max-w-lg h-full bg-[#0b0f19]/95 border-l border-slate-850 shadow-2xl relative z-10 flex flex-col justify-between overflow-y-auto animate-slide-left p-6 space-y-6">
-                
-                {/* Drawer Header */}
-                <div className="flex justify-between items-center border-b border-slate-850 pb-4 shrink-0">
+              {/* Header Top-Bar */}
+              <div className="flex justify-between items-center bg-[#0d121f] border-b border-slate-850 px-6 py-4 shrink-0">
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setSelectedReport(null)}
+                    className="p-2 bg-slate-900 border border-slate-800 rounded-xl text-slate-400 hover:text-white transition-colors cursor-pointer flex items-center justify-center"
+                    title={t("Back to Dashboard")}
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                  </button>
                   <div className="text-left">
                     <span className="text-[10px] text-brand-300 font-bold uppercase tracking-wider">{t(selectedReport.category)}</span>
-                    <h2 className="text-base font-extrabold text-white mt-0.5">{t("Incident Details")} #${selectedReport.id.substring(0, 6)}</h2>
-                    <div className="mt-1">
-                      <SeverityBadge severity={selectedReport.severity} status={selectedReport.status} />
-                    </div>
+                    <h2 className="text-base font-extrabold text-white mt-0.5">{t("Incident Operations Command Console")} #{selectedReport.id.substring(0, 8)}</h2>
                   </div>
+                </div>
+                
+                <div className="flex items-center gap-3">
+                  <SeverityBadge severity={selectedReport.severity} status={selectedReport.status} />
                   <button
                     onClick={() => setSelectedReport(null)}
                     className="p-2 bg-slate-900 border border-slate-800 rounded-full text-slate-400 hover:text-white transition-colors cursor-pointer"
@@ -961,176 +1443,213 @@ export default function OfficerDashboard() {
                     <X className="w-4 h-4" />
                   </button>
                 </div>
+              </div>
 
-                {/* Drawer Body Scroll */}
-                <div className="flex-1 overflow-y-auto space-y-5 pr-1 scrollbar-thin text-left">
+              {/* Main Body Split Columns */}
+              <div className="flex-1 overflow-y-auto p-6 md:p-8 lg:p-10 bg-[#080c14]">
+                <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
                   
-                  {/* Large Image Attachment */}
-                  <div className="relative h-48 w-full rounded-2xl overflow-hidden border border-slate-850 shadow-lg shrink-0">
-                    <img
-                      src={selectedReport.imageUrl}
-                      alt={selectedReport.title}
-                      className="w-full h-full object-cover"
-                    />
-                    <div className="absolute bottom-4 left-4 px-3 py-1 rounded-full glass border border-white/10 text-[9px] font-bold text-white uppercase">
-                      {t("Citizen Attachment")}
-                    </div>
-                  </div>
-
-                  {/* Incident Text Block */}
-                  <div className="space-y-1">
-                    <h3 className="font-extrabold text-white text-sm">{t(selectedReport.title)}</h3>
-                    <p className="text-slate-350 text-xs leading-relaxed">{t(selectedReport.description)}</p>
-                  </div>
-
-                  {/* Citizen Metadata Info */}
-                  <div className="p-3 bg-slate-900/40 border border-slate-850 rounded-2xl flex items-center justify-between text-xs">
-                    <div>
-                      <span className="block text-[8px] text-slate-500 font-bold uppercase tracking-wider">{t("Submitted By:")}</span>
-                      <span className="font-bold text-slate-205">{selectedReport.reporterName}</span>
-                    </div>
-                    <div>
-                      <span className="block text-[8px] text-slate-500 font-bold uppercase tracking-wider text-right">{t("Community Upvotes:")}</span>
-                      <span className="font-extrabold text-brand-300 text-right block">+{selectedReport.upvotes || 1}</span>
-                    </div>
-                  </div>
-
-                  {/* Leaflet GPS Coordinates locator */}
-                  <div className="p-3 bg-slate-900/40 border border-slate-850 rounded-2xl text-xs space-y-1">
-                    <span className="block text-[8px] text-slate-500 font-bold uppercase tracking-wider">{t("Incident Location:")}</span>
-                    <div className="flex items-center gap-1 font-semibold text-slate-205">
-                      <MapPin className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                      <span>{t(selectedReport.location)}</span>
-                    </div>
-                    <span className="block text-[8px] text-slate-650 mt-1">Coordinates: {selectedReport.lat.toFixed(5)}, {selectedReport.lng.toFixed(5)}</span>
-                  </div>
-
-                  {/* AI Prediction Insight Box (Agent 1: Incident Triage) */}
-                  <div className="p-4 bg-blue-500/5 border border-blue-500/10 rounded-2xl space-y-2">
-                    <div className="flex justify-between items-center text-[9px] font-bold uppercase tracking-wider text-blue-400">
-                      <span>🤖 Agent 1: Triage Assessment</span>
-                      <span>94% Confidence</span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3 text-xs">
-                      <div>
-                        <span className="block text-[8px] text-slate-500 font-bold uppercase tracking-wider">{t("Est. Repair Cost:")}</span>
-                        <span className="font-extrabold text-white">₹{selectedReport.priorityScore * 1200 + 4000}</span>
-                      </div>
-                      <div>
-                        <span className="block text-[8px] text-slate-500 font-bold uppercase tracking-wider">{t("Est. Labor Duration:")}</span>
-                        <span className="font-extrabold text-white">{selectedReport.priorityScore > 75 ? "24 Hours" : "3 Days"}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* --- OFFICER DISPATCH ACTIONS FORM --- */}
-                  <div className="border-t border-slate-850 pt-4 space-y-4">
-                    <h3 className="font-black text-sm text-white uppercase tracking-wider">{t("Operations Dispatch Console")}</h3>
+                  {/* Left Column: Incident Telemetry (7/12 width) */}
+                  <div className="lg:col-span-7 space-y-6 text-left">
                     
-                    {/* Select Department */}
-                    <div className="space-y-1.5">
-                      <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider">{t("Assign Municipal Department")}</label>
-                      <select
-                        value={actionDept}
-                        onChange={(e) => setActionDept(e.target.value)}
-                        className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-205 focus:outline-none focus:border-brand-500"
-                      >
-                        <option value="">{t("Unassigned")}</option>
-                        <option value="Infrastructure">{t("Infrastructure & Engineering")}</option>
-                        <option value="Roads & Safety">{t("Roads & Safety Division")}</option>
-                        <option value="Sanitation">{t("Sanitation & Waste")}</option>
-                        <option value="Parks & Recreation">{t("Horticulture & Parks")}</option>
-                      </select>
+                    {/* Title & Description */}
+                    <div className="glass p-6 rounded-2xl border border-slate-800/60 space-y-3">
+                      <h3 className="font-extrabold text-white text-lg">{t(selectedReport.title)}</h3>
+                      <p className="text-slate-350 text-sm leading-relaxed">{t(selectedReport.description)}</p>
                     </div>
 
-                    {/* Staff Assignment */}
-                    <div className="space-y-1.5">
-                      <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider">{t("Assign Field Staff Crew")}</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. Squad 4 - Repairs"
-                        value={actionStaff}
-                        onChange={(e) => setActionStaff(e.target.value)}
-                        className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-205 focus:outline-none focus:border-brand-500"
-                      />
-                    </div>
-
-                    {/* Resolution inputs: only shown if status will be marked Resolved */}
-                    {selectedReport.status !== 'Resolved' && (
-                      <div className="p-3 bg-slate-900/20 border border-slate-850 rounded-2xl space-y-3">
-                        <span className="block text-[9px] font-bold text-emerald-450 uppercase tracking-wider">{t("Close Out Verification details")}</span>
-                        <div className="space-y-1.5">
-                          <label className="block text-[8px] text-slate-500 font-bold uppercase tracking-wider">{t("Resolution Maintenance Notes")}</label>
-                          <textarea
-                            placeholder={t("Briefly describe maintenance action taken...")}
-                            value={resolutionNotes}
-                            onChange={(e) => setResolutionNotes(e.target.value)}
-                            className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-205 focus:outline-none focus:border-brand-500 h-16 resize-none"
+                    {/* Image Attachment (Only if present) */}
+                    {selectedReport.imageUrl && (
+                      <div className="glass p-4 rounded-2xl border border-slate-800/60">
+                        <span className="block text-[9px] text-slate-500 font-bold uppercase tracking-wider mb-2.5">{t("Citizen Attachment Photo")}</span>
+                        <div className="relative rounded-xl overflow-hidden border border-slate-855 h-96 w-full bg-slate-900/50">
+                          <img
+                            src={selectedReport.imageUrl}
+                            alt={selectedReport.title}
+                            className="w-full h-full object-cover"
                           />
-                        </div>
-                        <div className="space-y-1.5">
-                          <label className="block text-[8px] text-slate-500 font-bold uppercase tracking-wider">{t("Upload Verification Photo")}</label>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={handleResolutionImageUpload}
-                            className="text-xs text-slate-400"
-                          />
-                          {resolutionImage && (
-                            <img
-                              src={resolutionImage}
-                              alt="Resolution proof"
-                              className="w-16 h-16 rounded object-cover border border-slate-850 mt-1"
-                            />
-                          )}
                         </div>
                       </div>
                     )}
 
-                    {/* Action Execution buttons */}
-                    <div className="grid grid-cols-2 gap-2 pt-2">
-                      {selectedReport.status === 'Pending' && (
-                        <button
-                          onClick={() => handleUpdateStatus('In Progress')}
-                          disabled={actionSubmitting}
-                          className="py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1 shadow-md shadow-indigo-650/10"
-                        >
-                          <Clock className="w-3.5 h-3.5" />
-                          <span>{t("Dispatch Crew")}</span>
-                        </button>
-                      )}
+                    {/* GPS Location & Coordinates Map indicator */}
+                    <div className="glass p-6 rounded-2xl border border-slate-800/60 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">{t("Telemetry Location Coordinates")}</span>
+                        <span className="text-[10px] text-slate-400 font-mono">LAT: {(selectedReport.lat || 12.9716).toFixed(6)} | LNG: {(selectedReport.lng || 77.5946).toFixed(6)}</span>
+                      </div>
                       
-                      {selectedReport.status !== 'Resolved' && (
-                        <button
-                          onClick={() => handleUpdateStatus('Resolved')}
-                          disabled={actionSubmitting}
-                          className="py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1 col-span-2"
+                      <div className="flex items-start gap-3 p-4 rounded-xl bg-slate-900/40 border border-slate-850">
+                        <MapPin className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
+                        <div>
+                          <h4 className="font-bold text-slate-200 text-sm">{t("Incident Location Address")}</h4>
+                          <p className="text-slate-400 text-xs mt-1 leading-normal">{t(selectedReport.location)}</p>
+                        </div>
+                      </div>
+
+                      {/* Map display */}
+                      <div className="h-64 rounded-xl overflow-hidden border border-slate-850 bg-slate-900/50 relative">
+                        <div ref={detailMapRef} className="absolute inset-0 z-0 w-full h-full" />
+                      </div>
+                    </div>
+
+                    {/* Reporter Metadata */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="glass p-4 rounded-2xl border border-slate-800/60">
+                        <span className="block text-[9px] text-slate-500 font-bold uppercase tracking-wider">{t("Submitted By:")}</span>
+                        <span className="font-extrabold text-slate-200 text-sm mt-1 block">{selectedReport.reporterName}</span>
+                      </div>
+                      <div className="glass p-4 rounded-2xl border border-slate-800/60">
+                        <span className="block text-[9px] text-slate-500 font-bold uppercase tracking-wider">{t("Community Upvotes:")}</span>
+                        <span className="font-extrabold text-blue-400 text-sm mt-1 block">+{selectedReport.upvotes || 1} upvotes</span>
+                      </div>
+                    </div>
+
+                  </div>
+
+                  {/* Right Column: Dispatch & Actions Console (5/12 width) */}
+                  <div className="lg:col-span-5 space-y-6 text-left">
+                    
+                    {/* AI Assessment Prediction */}
+                    <div className="glass p-6 rounded-2xl border border-blue-900/20 bg-blue-950/5 space-y-4">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-blue-400 flex items-center gap-1.5">
+                          <Cpu className="w-4 h-4 text-blue-400 animate-pulse" />
+                          <span>AI Triage Assessment</span>
+                        </span>
+                        <span className="text-[9px] bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-full font-bold">94% CONFIDENCE</span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4 text-xs font-bold text-slate-400">
+                        <div className="bg-slate-900/40 border border-slate-850 p-3.5 rounded-xl space-y-1">
+                          <span className="block text-[8px] text-slate-500 uppercase tracking-wide">{t("Predicted Repair Cost")}</span>
+                          <span className="text-sm font-black text-white">₹{selectedReport.priorityScore * 1200 + 4000}</span>
+                        </div>
+                        <div className="bg-slate-900/40 border border-slate-850 p-3.5 rounded-xl space-y-1">
+                          <span className="block text-[8px] text-slate-500 uppercase tracking-wide">{t("Estimated Repair Duration")}</span>
+                          <span className="text-sm font-black text-white">{selectedReport.priorityScore > 75 ? "24 Hours" : "3 Days"}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Operations Console Form */}
+                    <div className="glass p-6 rounded-2xl border border-slate-800/60 space-y-5">
+                      <h3 className="font-black text-sm text-white uppercase tracking-widest pb-3 border-b border-slate-850">{t("Operations Dispatch Console")}</h3>
+                      
+                      {/* Department Select */}
+                      <div className="space-y-1.5">
+                        <label className="block text-[9px] font-bold text-slate-450 uppercase tracking-wider">{t("Assign Municipal Department")}</label>
+                        <select
+                          value={actionDept}
+                          onChange={(e) => setActionDept(e.target.value)}
+                          className="w-full px-4 py-3 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-205 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-colors cursor-pointer"
                         >
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          <span>{t("Close & Mark Resolved")}</span>
-                        </button>
+                          <option value="">{t("Unassigned")}</option>
+                          <option value="Infrastructure">{t("Infrastructure & Engineering")}</option>
+                          <option value="Roads & Safety">{t("Roads & Safety Division")}</option>
+                          <option value="Sanitation">{t("Sanitation & Waste")}</option>
+                          <option value="Parks & Recreation">{t("Horticulture & Parks")}</option>
+                        </select>
+                      </div>
+
+                      {/* Staff Input */}
+                      <div className="space-y-1.5">
+                        <label className="block text-[9px] font-bold text-slate-450 uppercase tracking-wider">{t("Assign Field Staff Crew")}</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Squad 4 - Repairs"
+                          value={actionStaff}
+                          onChange={(e) => setActionStaff(e.target.value)}
+                          className="w-full px-4 py-3 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-205 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-colors"
+                        />
+                      </div>
+
+                      {/* Close Out Verification details */}
+                      {selectedReport.status !== 'Resolved' && (
+                        <div className="p-4 bg-slate-900/20 border border-slate-850 rounded-2xl space-y-3.5">
+                          <span className="block text-[9px] font-bold text-emerald-450 uppercase tracking-widest">{t("Close Out Verification details")}</span>
+                          
+                          <div className="space-y-1.5">
+                            <label className="block text-[8px] text-slate-500 font-bold uppercase tracking-wider">{t("Resolution Maintenance Notes")}</label>
+                            <textarea
+                              placeholder={t("Briefly describe maintenance action taken...")}
+                              value={resolutionNotes}
+                              onChange={(e) => setResolutionNotes(e.target.value)}
+                              className="w-full px-4 py-3 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-205 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-colors h-20 resize-none"
+                            />
+                          </div>
+                          
+                          <div className="space-y-1.5">
+                            <label className="block text-[8px] text-slate-500 font-bold uppercase tracking-wider">{t("Upload Verification Photo")}</label>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleResolutionImageUpload}
+                              className="text-xs text-slate-400 block cursor-pointer"
+                            />
+                            {resolutionImage && (
+                              <div className="relative w-20 h-20 rounded-xl overflow-hidden border border-slate-800 mt-2">
+                                <img
+                                  src={resolutionImage}
+                                  alt="Resolution proof"
+                                  className="w-full h-full object-cover"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       )}
 
-                      <button
-                        onClick={handleEscalateIncident}
-                        className="py-2.5 bg-slate-900 border border-slate-800 hover:bg-rose-955/10 hover:border-rose-500/20 text-rose-455 text-xs font-bold rounded-xl transition-all cursor-pointer"
-                      >
-                        {t("Escalate Urgent")}
-                      </button>
+                      {/* Action Execution Button Grid */}
+                      <div className="space-y-3 pt-2">
+                        <div className="grid grid-cols-2 gap-3">
+                          {selectedReport.status === 'Pending' && (
+                            <button
+                              onClick={() => handleUpdateStatus('In Progress')}
+                              disabled={actionSubmitting}
+                              className="py-3 bg-indigo-650 hover:bg-indigo-550 text-white text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md shadow-indigo-650/15"
+                            >
+                              <Clock className="w-3.5 h-3.5" />
+                              <span>{t("Dispatch Crew")}</span>
+                            </button>
+                          )}
+                          
+                          <button
+                            onClick={handleEscalateIncident}
+                            className="py-3 bg-slate-900 border border-slate-800 hover:bg-rose-955/15 hover:border-rose-500/30 text-rose-455 text-xs font-bold rounded-xl transition-all cursor-pointer"
+                          >
+                            {t("Escalate Urgent")}
+                          </button>
 
-                      <button
-                        onClick={handleRequestMoreInfo}
-                        className="py-2.5 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-355 text-xs font-bold rounded-xl transition-all cursor-pointer"
-                      >
-                        {t("Request Info")}
-                      </button>
+                          <button
+                            onClick={handleRequestMoreInfo}
+                            className={`py-3 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-355 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                              selectedReport.status === 'Pending' ? '' : 'col-span-2'
+                            }`}
+                          >
+                            {t("Request Info")}
+                          </button>
+                        </div>
+
+                        {selectedReport.status !== 'Resolved' && (
+                          <button
+                            onClick={() => handleUpdateStatus('Resolved')}
+                            disabled={actionSubmitting}
+                            className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-lg shadow-emerald-650/10"
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                            <span>{t("Close & Mark Resolved")}</span>
+                          </button>
+                        )}
+                      </div>
+
                     </div>
 
                   </div>
 
                 </div>
-
               </div>
+
             </div>
           )}
 
@@ -1150,55 +1669,94 @@ export default function OfficerDashboard() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             
-            {/* Agent 2: Duplicate Detection */}
-            <div className="glass p-5 rounded-2xl border border-slate-800/60 text-left space-y-3 relative overflow-hidden">
-              <div className="flex justify-between items-center border-b border-slate-800/40 pb-2.5">
-                <span className="text-[10px] font-black uppercase tracking-widest text-brand-300">{t("Agent 2: Duplicate Classifier")}</span>
-                <span className="text-[9px] bg-brand-500/10 text-brand-300 border border-brand-500/20 px-2 py-0.2 rounded-md font-bold uppercase tracking-wider">{t("Continuously Scanning")}</span>
-              </div>
-              <p className="text-slate-300 text-xs leading-relaxed">{t("Scans incoming report descriptions and coordinates to identify overlaps and recommend ticket mergers.")}</p>
-              <div className="p-3 bg-slate-900/50 rounded-xl space-y-1.5 border border-slate-850">
-                <div className="flex justify-between text-xs font-bold text-white">
-                  <span>Detected Overlaps:</span>
-                  <span className="text-brand-300">2 duplicate reports</span>
+            {/* Agent 2: Duplicate Classifier */}
+            <div className="glass p-5 rounded-2xl border border-slate-800/60 text-left space-y-3 relative overflow-hidden flex flex-col justify-between">
+              <div className="space-y-3">
+                <div className="flex justify-between items-center border-b border-slate-800/40 pb-2.5">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-brand-300">{t("Agent 2: Duplicate Classifier")}</span>
+                  <span className="text-[9px] bg-brand-500/10 text-brand-300 border border-brand-500/20 px-2 py-0.2 rounded-md font-bold uppercase tracking-wider">{t("Continuously Scanning")}</span>
                 </div>
-                <p className="text-[10px] text-slate-455 leading-relaxed">Overlap Detected: "Broken street lamp" in Ward 17. Merging these issues saves an estimated 14 dispatcher dispatch hours.</p>
+                <p className="text-slate-300 text-xs leading-relaxed">{t("Scans incoming report descriptions and coordinates to identify overlaps and recommend ticket mergers.")}</p>
+                <div className="p-3 bg-slate-900/50 rounded-xl space-y-1.5 border border-slate-850">
+                  <div className="flex justify-between text-xs font-bold text-white">
+                    <span>Detected Overlaps:</span>
+                    <span className="text-brand-300">{reports.filter(r => r.status !== 'Resolved' && r.id.startsWith('rep-dup')).length > 1 ? "4 duplicate reports" : "0 duplicate reports"}</span>
+                  </div>
+                  <p className="text-[10px] text-slate-455 leading-relaxed">
+                    {reports.filter(r => r.status !== 'Resolved' && r.id.startsWith('rep-dup')).length > 1
+                      ? "Overlap Detected: 'Broken streetlight' at 405 Pine & 'Water pipe' on Broadway. Merging these issues saves dispatch workload hours."
+                      : "All current reports checked. No active duplicate overlaps detected in the database."}
+                  </p>
+                </div>
               </div>
+              <button
+                onClick={runDuplicateClassifier}
+                disabled={classifierRunning}
+                className="w-full py-2 bg-brand-600 hover:bg-brand-550 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-md flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                <Cpu className="w-3.5 h-3.5 animate-pulse" />
+                <span>{classifierRunning ? t("Scanning Database...") : t("Run Duplicate Classifier")}</span>
+              </button>
             </div>
 
             {/* Agent 3: Resource Planner */}
-            <div className="glass p-5 rounded-2xl border border-slate-800/60 text-left space-y-3 relative overflow-hidden">
-              <div className="flex justify-between items-center border-b border-slate-800/40 pb-2.5">
-                <span className="text-[10px] font-black uppercase tracking-widest text-blue-400">{t("Agent 3: Resource Dispatch Dispatcher")}</span>
-                <span className="text-[9px] bg-blue-500/10 text-blue-300 border border-blue-500/20 px-2 py-0.2 rounded-md font-bold uppercase tracking-wider">{t("Ready")}</span>
-              </div>
-              <p className="text-slate-300 text-xs leading-relaxed">{t("Analyzes priority ratings, categories, and active dispatcher teams to recommend optimal maintenance squad dispatches.")}</p>
-              <div className="p-3 bg-slate-900/50 rounded-xl space-y-1.5 border border-slate-850 text-xs">
-                <div className="flex justify-between font-bold text-white">
-                  <span>Best Suggested Squad:</span>
-                  <span className="text-blue-400">Squad C - Sanitation Dispatch</span>
+            <div className="glass p-5 rounded-2xl border border-slate-800/60 text-left space-y-3 relative overflow-hidden flex flex-col justify-between">
+              <div className="space-y-3">
+                <div className="flex justify-between items-center border-b border-slate-800/40 pb-2.5">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-blue-400">{t("Agent 3: Resource Planner Agent")}</span>
+                  <span className="text-[9px] bg-blue-500/10 text-blue-300 border border-blue-500/20 px-2 py-0.2 rounded-md font-bold uppercase tracking-wider">{t("Ready")}</span>
                 </div>
-                <div className="flex justify-between text-[10px] text-slate-455">
-                  <span>Estimated Arrival time:</span>
-                  <span>14 Minutes (GPS optimized)</span>
+                <p className="text-slate-300 text-xs leading-relaxed">{t("Analyzes priority ratings, categories, and workloads to dynamically formulate optimal resource allocation plans.")}</p>
+                <div className="p-3 bg-slate-900/50 rounded-xl space-y-1.5 border border-slate-850 text-xs">
+                  <div className="flex justify-between font-bold text-white">
+                    <span>Pending AI Allocations:</span>
+                    <span className="text-blue-400">{reports.filter(r => r.status === 'Pending').length} active issues</span>
+                  </div>
+                  <div className="flex justify-between text-[10px] text-slate-455">
+                    <span>Status:</span>
+                    <span>Ready for evaluation</span>
+                  </div>
                 </div>
               </div>
+              <button
+                onClick={() => {
+                  setShowPlannerModal(true);
+                  const firstPending = reports.find(r => r.status === 'Pending') || reports[0];
+                  if (firstPending) {
+                    loadResourcePlanForReport(firstPending);
+                  }
+                }}
+                className="w-full py-2 bg-blue-600 hover:bg-blue-550 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-md flex items-center justify-center gap-1.5"
+              >
+                <Sparkles className="w-3.5 h-3.5 animate-pulse" />
+                <span>{t("Open Resource Planner Console")}</span>
+              </button>
             </div>
 
-            {/* Agent 4: Predictive Risk warnings */}
-            <div className="glass p-5 rounded-2xl border border-slate-800/60 text-left space-y-3 relative overflow-hidden">
-              <div className="flex justify-between items-center border-b border-slate-800/40 pb-2.5">
-                <span className="text-[10px] font-black uppercase tracking-widest text-rose-455">{t("Agent 4: Predictive Risk Analyzer")}</span>
-                <span className="text-[9px] bg-rose-500/10 text-rose-455 border border-rose-500/20 px-2 py-0.2 rounded-md font-bold uppercase tracking-wider animate-pulse">{t("High Alert")}</span>
-              </div>
-              <p className="text-slate-300 text-xs leading-relaxed">{t("Combines weather alerts with citizen complaints to predict localized municipal hazards.")}</p>
-              <div className="p-3 bg-slate-900/50 rounded-xl space-y-2 border border-slate-850 text-xs">
-                <div className="flex items-center gap-1.5 text-rose-455 font-bold">
-                  <AlertTriangle className="w-3.5 h-3.5" />
-                  <span>Predicted Threat: Localized Flash Flood (88% Confidence)</span>
+            {/* Agent 4: Predictive Risk Analyzer */}
+            <div className="glass p-5 rounded-2xl border border-slate-800/60 text-left space-y-3 relative overflow-hidden flex flex-col justify-between">
+              <div className="space-y-3">
+                <div className="flex justify-between items-center border-b border-slate-800/40 pb-2.5">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-rose-455">{t("Agent 4: Predictive Risk Analyzer")}</span>
+                  <span className="text-[9px] bg-rose-500/10 text-rose-455 border border-rose-500/20 px-2 py-0.2 rounded-md font-bold uppercase tracking-wider animate-pulse">{t("High Alert")}</span>
                 </div>
-                <p className="text-[10px] text-slate-455 leading-relaxed">Trigger: Drainage clog reports in Ward 17 + Met Office heavy rainfall warning (85mm/hr forecast).</p>
+                <p className="text-slate-300 text-xs leading-relaxed">{t("Combines weather alerts with citizen complaints to predict localized municipal hazards.")}</p>
+                <div className="p-3 bg-slate-900/50 rounded-xl space-y-2 border border-slate-850 text-xs">
+                  <div className="flex items-center gap-1.5 text-rose-455 font-bold">
+                    <AlertTriangle className="w-3.5 h-3.5 animate-pulse" />
+                    <span>Predicted Threat: Localized Utility & Transit Failures</span>
+                  </div>
+                  <p className="text-[10px] text-slate-455 leading-relaxed">Trigger: Dense report clusters near critical health and traffic infrastructure hubs.</p>
+                </div>
               </div>
+              <button
+                onClick={runRiskAnalyzer}
+                disabled={riskAnalyzerRunning}
+                className="w-full py-2 bg-rose-600 hover:bg-rose-550 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-md flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                <TrendingUp className="w-3.5 h-3.5 animate-pulse" />
+                <span>{riskAnalyzerRunning ? t("Analyzing Risks...") : t("Analyze Municipal Risks")}</span>
+              </button>
             </div>
 
             {/* Agent 5 & 6: Priority & Escalation overview */}
@@ -1503,14 +2061,14 @@ export default function OfficerDashboard() {
                     <tr key={docItem.id} className="hover:bg-slate-900/10 transition-colors">
                       <td className="py-3.5 px-4 font-bold text-white">{t(docItem.userName || "Anonymous Citizen")}</td>
                       <td className="py-3.5 px-4 font-medium text-slate-300">{docItem.name}</td>
-                      <td className="py-3.5 px-4">
-                        <span className="px-2 py-0.5 rounded bg-brand-500/10 text-brand-350 border border-brand-500/15 font-bold uppercase text-[9px]">
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <span className="px-2 py-0.5 rounded bg-brand-500/10 text-brand-350 border border-brand-500/15 font-bold uppercase text-[9px] whitespace-nowrap">
                           {t(docItem.category)}
                         </span>
                       </td>
-                      <td className="py-3.5 px-4 text-slate-400 font-semibold">{formatDate(docItem.date)}</td>
-                      <td className="py-3.5 px-4">
-                        <span className={`px-2 py-0.5 rounded-full border text-[9px] font-bold uppercase tracking-wider ${
+                      <td className="py-3.5 px-4 text-slate-400 font-semibold whitespace-nowrap">{formatDate(docItem.date)}</td>
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <span className={`px-2 py-0.5 rounded-full border text-[9px] font-bold uppercase tracking-wider whitespace-nowrap ${
                           docItem.status === 'Approved'
                             ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
                             : docItem.status === 'Pending Verification'
@@ -1520,16 +2078,22 @@ export default function OfficerDashboard() {
                           {t(docItem.status)}
                         </span>
                       </td>
-                      <td className="py-3.5 px-4 text-right">
-                        <button
-                          onClick={() => {
-                            setSelectedVerDoc(docItem);
-                            setReviewRemarks(docItem.officerRemark || '');
-                          }}
-                          className="px-3 py-1 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white rounded-lg border border-slate-800 hover:border-slate-700 transition-all font-bold cursor-pointer"
-                        >
-                          {t("Review Document")}
-                        </button>
+                      <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                        {docItem.status === 'Pending Verification' ? (
+                          <button
+                            onClick={() => {
+                              setSelectedVerDoc(docItem);
+                              setReviewRemarks(docItem.officerRemark || '');
+                            }}
+                            className="px-3 py-1 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white rounded-lg border border-slate-800 hover:border-slate-700 transition-all font-bold cursor-pointer"
+                          >
+                            {t("Review Document")}
+                          </button>
+                        ) : (
+                          <span className="inline-block px-3 py-1 bg-slate-100 dark:bg-slate-900 border border-slate-250 dark:border-slate-800 text-slate-600 dark:text-slate-400 text-[10px] font-black rounded-lg uppercase tracking-wider whitespace-nowrap shadow-sm">
+                            {t("Finalized")}
+                          </span>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -1624,7 +2188,7 @@ export default function OfficerDashboard() {
                 type="button"
                 onClick={() => handleReviewDocSubmit('Rejected')}
                 disabled={reviewSubmitting || !reviewRemarks.trim()}
-                className="flex-1 py-2.5 bg-rose-955 hover:bg-rose-900 border border-rose-900 text-rose-455 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex-1 py-2.5 bg-rose-500/10 hover:bg-rose-600 border border-rose-500/20 hover:border-rose-600 text-rose-400 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {t("Reject")}
               </button>
@@ -1647,6 +2211,694 @@ export default function OfficerDashboard() {
                 {reviewSubmitting ? t("Submitting...") : t("Approve")}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* AI Duplicate Classifier Modal (Agent 2 Console) */}
+      {showDuplicateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-955/85 backdrop-blur-md animate-fade-in" onClick={() => setShowDuplicateModal(false)}>
+          <div 
+            className="w-full max-w-5xl bg-[#0b0f19]/98 border border-slate-850 shadow-2xl rounded-3xl relative flex flex-col max-h-[90vh] overflow-hidden animate-scale-up p-6 md:p-8 space-y-6 text-left"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex justify-between items-center border-b border-slate-850 pb-4">
+              <div className="flex items-center gap-2">
+                <BrainCircuit className="w-6 h-6 text-brand-400 animate-pulse" />
+                <div>
+                  <h3 className="text-md font-black text-white uppercase tracking-wider">{t("AI Duplicate Classifier Assistant")}</h3>
+                  <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider">{t("Agent 2 Active Database Scan")}</span>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowDuplicateModal(false)}
+                className="p-1.5 bg-slate-900 border border-slate-800 rounded-full text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Main content body */}
+            <div className="flex-1 overflow-y-auto space-y-6 pr-1.5 scrollbar-thin">
+              {duplicateGroups.length === 0 ? (
+                <div className="p-16 text-center border border-dashed border-slate-850 rounded-2xl text-slate-500 space-y-4">
+                  <CheckCircle2 className="w-12 h-12 mx-auto text-emerald-500/80 animate-bounce" />
+                  <h3 className="text-sm font-bold text-slate-455 uppercase tracking-widest">{t("No Overlapping Duplicates Found")}</h3>
+                  <p className="text-xs text-slate-550 max-w-sm mx-auto">{t("All active citizen reports are unique! The duplicate scanning classifier found zero ticket overlaps.")}</p>
+                </div>
+              ) : (
+                <div className="space-y-8">
+                  {duplicateGroups.map((group, groupIdx) => {
+                    const groupReports = group.reportIds.map(id => reports.find(r => r.id === id)).filter(Boolean);
+                    if (groupReports.length === 0) return null;
+                    const primaryReport = groupReports[0];
+
+                    return (
+                      <div key={group.duplicateGroupId} className="p-5 bg-slate-950/40 border border-slate-850 rounded-2xl space-y-4 relative overflow-hidden">
+                        
+                        {/* Group Header info */}
+                        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-850 pb-3">
+                          <div className="space-y-1">
+                            <span className="text-[9px] bg-brand-500/10 text-brand-350 border border-brand-500/20 px-2 py-0.5 rounded font-black uppercase tracking-wider">
+                              {t("Cluster #")}0{groupIdx + 1}
+                            </span>
+                            <h4 className="text-xs font-black text-white uppercase tracking-wider mt-1">{group.issueTitle}</h4>
+                          </div>
+
+                          <div className="flex flex-wrap gap-1.5">
+                            {group.matchingParameters.map(param => (
+                              <span key={param} className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/15 font-bold uppercase text-[9px] whitespace-nowrap">
+                                {t(param)}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Reports side-by-side comparison */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {groupReports.map((rep, idx) => (
+                            <div key={rep.id} className={`p-4 rounded-xl border transition-all ${idx === 0 ? 'bg-blue-950/5 border-blue-900/35 ring-1 ring-blue-500/10' : 'bg-slate-900/10 border-slate-850'}`}>
+                              <div className="flex justify-between items-start gap-2 mb-2">
+                                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                                  {idx === 0 ? t("Primary Ticket (First)") : `${t("Duplicate Claim")} #${idx}`}
+                                </span>
+                                <span className={`px-2 py-0.5 rounded-full border text-[8px] font-bold uppercase ${
+                                  rep.status === 'Pending' 
+                                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' 
+                                    : 'bg-blue-500/10 text-blue-450 border-blue-500/20'
+                                }`}>
+                                  {rep.status}
+                                </span>
+                              </div>
+                              <h5 className="text-xs font-bold text-white mb-1.5">{rep.title}</h5>
+                              <p className="text-[10px] text-slate-455 leading-relaxed line-clamp-3 mb-3">{rep.description}</p>
+                              
+                              {/* Metadata grid */}
+                              <div className="grid grid-cols-2 gap-2 text-[9px] text-slate-500 pt-2 border-t border-slate-900">
+                                <div>Location: <span className="font-bold text-slate-300 block truncate">{rep.location}</span></div>
+                                <div>Category: <span className="font-bold text-slate-300 block">{rep.category}</span></div>
+                                <div>Reporter: <span className="font-bold text-slate-350 block">{rep.reporterName}</span></div>
+                                <div>Date: <span className="font-bold text-slate-350 block">{rep.date}</span></div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* AI Judgment explanation alert */}
+                        <div className="p-3 bg-brand-500/5 border border-brand-500/10 rounded-xl space-y-1.5 text-xs text-left leading-relaxed">
+                          <span className="text-[9px] font-black text-brand-350 uppercase tracking-widest flex items-center gap-1">
+                            <Cpu className="w-3.5 h-3.5 animate-pulse" />
+                            <span>AI MERGER JUDGMENT VERDICT</span>
+                          </span>
+                          <p className="text-[10px] text-slate-350 leading-relaxed">{group.reason}</p>
+                        </div>
+
+                        {/* Actions block */}
+                        <div className="flex justify-end pt-2">
+                          <button
+                            onClick={() => handleMergeReports(primaryReport.id, group.reportIds, group.reason)}
+                            disabled={mergingSubmitting}
+                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-extrabold transition-all cursor-pointer shadow-md flex items-center gap-1.5 disabled:opacity-50"
+                          >
+                            {mergingSubmitting ? t("Merging...") : t("Approve AI Merger & Resolve Duplicates")}
+                          </button>
+                        </div>
+
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AI Predictive Risk Modal (Agent 4 Console) */}
+      {showRiskModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-955/85 backdrop-blur-md animate-fade-in" onClick={() => setShowRiskModal(false)}>
+          <div 
+            className="w-full max-w-5xl bg-[#0b0f19]/98 border border-slate-850 shadow-2xl rounded-3xl relative flex flex-col max-h-[90vh] overflow-hidden animate-scale-up p-6 md:p-8 space-y-6 text-left"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex justify-between items-center border-b border-slate-850 pb-4">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-6 h-6 text-rose-450 animate-pulse" />
+                <div>
+                  <h3 className="text-md font-black text-white uppercase tracking-wider">{t("Predictive Risk Intelligence Console")}</h3>
+                  <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-wider">{t("Agent 4 Proactive Alert Matrix")}</span>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowRiskModal(false)}
+                className="p-1.5 bg-slate-900 border border-slate-800 rounded-full text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Main content body */}
+            <div className="flex-1 overflow-y-auto space-y-6 pr-1.5 scrollbar-thin">
+              {predictiveRisks.length === 0 ? (
+                <div className="p-16 text-center border border-dashed border-slate-850 rounded-2xl text-slate-500 space-y-4">
+                  <CheckCircle2 className="w-12 h-12 mx-auto text-emerald-500/80 animate-bounce" />
+                  <h3 className="text-sm font-bold text-slate-455 uppercase tracking-widest">{t("No Unresolved Risks Detected")}</h3>
+                  <p className="text-xs text-slate-550 max-w-sm mx-auto">{t("All active citizen reports are mapped within safe baseline operational bounds.")}</p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {/* Explanatory banner */}
+                  <div className="p-4 bg-slate-900/40 border border-slate-850 rounded-2xl flex items-center justify-between gap-4">
+                    <p className="text-[11px] text-slate-400 leading-relaxed max-w-2xl">
+                      {t("This model grades active reports by analyzing geographical cluster densities, historical backlog metrics, SLA timers, proximity to critical city hubs (hospitals, schools, highways), and trend delta velocity.")}
+                    </p>
+                    <span className="text-[10px] bg-rose-500/10 text-rose-400 border border-rose-500/20 px-3 py-1 rounded-md font-black uppercase tracking-wider">
+                      {predictiveRisks.length} {t("Evaluated Reports")}
+                    </span>
+                  </div>
+
+                  {/* Risk Assessments list sorted by score descending */}
+                  <div className="space-y-4">
+                    {predictiveRisks
+                      .sort((a, b) => b.riskScore - a.riskScore)
+                      .map((risk) => {
+                        const rep = reports.find(r => r.id === risk.reportId);
+                        if (!rep) return null;
+
+                        // Severity Color coding based on score
+                        const isCritical = risk.riskScore >= 75;
+                        const isHigh = risk.riskScore >= 50 && risk.riskScore < 75;
+
+                        return (
+                          <div key={risk.reportId} className="p-5 bg-slate-950/30 border border-slate-850 rounded-2xl flex flex-col md:flex-row items-stretch gap-6 relative overflow-hidden transition-all hover:border-slate-800">
+                            
+                            {/* Score Ring Section */}
+                            <div className="flex flex-col items-center justify-center text-center px-4 border-b md:border-b-0 md:border-r border-slate-850 pb-4 md:pb-0 md:pr-6 min-w-[120px]">
+                              <div className="relative flex items-center justify-center w-16 h-16 rounded-full border-4 border-slate-900">
+                                <div className={`absolute inset-0 rounded-full border-4 border-t-transparent ${
+                                  isCritical 
+                                    ? 'border-rose-500 animate-spin-slow' 
+                                    : isHigh 
+                                      ? 'border-amber-500' 
+                                      : 'border-blue-500'
+                                }`} />
+                                <span className="text-lg font-black text-white">{risk.riskScore}</span>
+                              </div>
+                              <span className={`text-[9px] font-black uppercase tracking-widest mt-2 ${
+                                isCritical 
+                                  ? 'text-rose-400' 
+                                  : isHigh 
+                                    ? 'text-amber-400' 
+                                    : 'text-blue-400'
+                              }`}>
+                                {isCritical ? t("Critical Risk") : isHigh ? t("Elevated Risk") : t("Standard Risk")}
+                              </span>
+                            </div>
+
+                            {/* Ticket Details */}
+                            <div className="flex-1 space-y-3">
+                              <div className="flex flex-wrap items-start justify-between gap-2">
+                                <div>
+                                  <h4 className="text-xs font-black text-white uppercase tracking-wider">{rep.title}</h4>
+                                  <span className="text-[10px] text-slate-500 font-bold block">{rep.location}</span>
+                                </div>
+                                <span className="text-[9px] bg-slate-900 border border-slate-850 px-2 py-0.5 rounded text-slate-400 font-bold">
+                                  {rep.category}
+                                </span>
+                              </div>
+
+                              <p className="text-[10px] text-slate-455 leading-relaxed line-clamp-2">{rep.description}</p>
+
+                              {/* Triggered Factors Badges */}
+                              <div className="flex flex-wrap gap-1.5 pt-1">
+                                {risk.triggeredFactors.map(factor => (
+                                  <span key={factor} className="px-2 py-0.5 rounded bg-slate-900 text-slate-400 border border-slate-850 font-bold text-[8px] uppercase">
+                                    {factor}
+                                  </span>
+                                ))}
+                              </div>
+
+                              {/* AI Forecast & Recommendations */}
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-slate-900 text-xs">
+                                <div className="space-y-1 p-3 bg-rose-500/5 border border-rose-500/10 rounded-xl">
+                                  <span className="text-[9px] font-black text-rose-400 uppercase tracking-widest flex items-center gap-1">
+                                    <AlertCircle className="w-3.5 h-3.5" />
+                                    <span>AI PREDICTIVE OUTCOME (WHAT'S NEXT)</span>
+                                  </span>
+                                  <p className="text-[10px] text-slate-350 leading-relaxed font-semibold">{risk.predictedScenario}</p>
+                                </div>
+
+                                <div className="space-y-1 p-3 bg-emerald-500/5 border border-emerald-500/10 rounded-xl">
+                                  <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1">
+                                    <CheckCircle className="w-3.5 h-3.5" />
+                                    <span>AI PREVENTIVE RECOMMENDATION (WHAT TO DO NOW)</span>
+                                  </span>
+                                  <p className="text-[10px] text-slate-350 leading-relaxed font-semibold">{risk.preventiveAction}</p>
+                                </div>
+                              </div>
+
+                              {/* Actions Block */}
+                              <div className="flex justify-between items-center pt-3 border-t border-slate-900">
+                                <div className="text-[10px] text-slate-500">
+                                  {t("Status")}: <span className={`font-black uppercase ml-1 ${rep.status === 'Resolved' ? 'text-emerald-400' : 'text-amber-405'}`}>{rep.status}</span>
+                                </div>
+                                {rep.status !== 'Resolved' ? (
+                                  <button
+                                    onClick={() => {
+                                      setShowRiskModal(false);
+                                      setActiveTab('queue');
+                                      setSelectedReport(rep);
+                                    }}
+                                    className="px-4 py-1.5 bg-rose-600 hover:bg-rose-550 text-white rounded-xl text-[10px] font-extrabold transition-all cursor-pointer shadow-md flex items-center gap-1"
+                                  >
+                                    <ArrowRight className="w-3 h-3 animate-pulse" />
+                                    <span>{t("Go to Incident Queue & Resolve")}</span>
+                                  </button>
+                                ) : (
+                                  <span className="text-[10px] text-slate-500 italic font-bold uppercase tracking-wider flex items-center gap-1">
+                                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+                                    {t("Issue Successfully Resolved")}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AI Resource Planner Modal (Agent 3 Console) */}
+      {showPlannerModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-955/85 backdrop-blur-md animate-fade-in" onClick={() => setShowPlannerModal(false)}>
+          <div 
+            className="w-full max-w-6xl bg-white dark:bg-[#0b0f19]/98 border border-slate-200 dark:border-slate-850 shadow-2xl rounded-3xl relative flex flex-col h-[90vh] overflow-hidden animate-scale-up p-6 md:p-8 text-left text-slate-900 dark:text-white"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-850 pb-4">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-6 h-6 text-blue-600 dark:text-blue-400 animate-pulse" />
+                <div>
+                  <h3 className="text-md font-black text-slate-800 dark:text-white uppercase tracking-wider">{t("AI Resource Planner Agent Console")}</h3>
+                  <span className="text-[10px] text-slate-400 dark:text-slate-500 font-extrabold uppercase tracking-wider">{t("Agent 3 Active Dispatch & Cost Matrix")}</span>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowPlannerModal(false)}
+                className="p-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-full text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Split Screen Layout */}
+            <div className="flex-1 flex flex-col md:flex-row overflow-hidden gap-6 pt-4">
+              
+              {/* Left Column: Incidents List & Filters */}
+              <div className="w-full md:w-2/5 flex flex-col overflow-hidden space-y-4 border-r border-slate-200 dark:border-slate-900 pr-4">
+                
+                {/* Search & Sort controls */}
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
+                    <input
+                      type="text"
+                      placeholder={t("Search incidents...")}
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-850 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-550 focus:outline-none focus:border-blue-500 transition-colors"
+                    />
+                  </div>
+                  
+                  <select
+                    value={plannerSortBy}
+                    onChange={(e) => setPlannerSortBy(e.target.value)}
+                    className="bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-850 rounded-xl px-2 py-1 text-xs text-slate-800 dark:text-slate-300 focus:outline-none focus:border-blue-500 font-semibold"
+                  >
+                    <option value="RiskScore">{t("Sort: Risk")}</option>
+                    <option value="Priority">{t("Sort: Priority")}</option>
+                    <option value="Cost">{t("Sort: Cost")}</option>
+                    <option value="Time">{t("Sort: Time")}</option>
+                    <option value="Department">{t("Sort: Department")}</option>
+                  </select>
+                </div>
+
+                {/* Filter Tabs */}
+                <div className="flex border-b border-slate-200 dark:border-slate-900 pb-1 gap-2">
+                  {['Pending', 'Resolved', 'Emergency'].map(tab => (
+                    <button
+                      key={tab}
+                      onClick={() => setPlannerFilter(tab)}
+                      className={`flex-1 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg border transition-all ${
+                        plannerFilter === tab 
+                          ? 'bg-blue-600/10 text-blue-600 dark:text-blue-400 border-blue-600/30' 
+                          : 'bg-transparent text-slate-400 dark:text-slate-450 border-transparent hover:text-slate-650 dark:hover:text-slate-300'
+                      }`}
+                    >
+                      {t(tab)}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Incidents Queue */}
+                <div className="flex-1 overflow-y-auto space-y-2 pr-1 scrollbar-thin">
+                  {reports
+                    .filter(r => {
+                      const matchesSearch = r.title.toLowerCase().includes(searchTerm.toLowerCase()) || r.location.toLowerCase().includes(searchTerm.toLowerCase());
+                      
+                      let matchesFilter = false;
+                      const isCritical = r.severity === 'Critical' || (r.priorityScore && r.priorityScore >= 75);
+
+                      if (plannerFilter === 'Pending') {
+                        matchesFilter = r.status !== 'Resources Assigned' && r.status !== 'Resolved';
+                      } else if (plannerFilter === 'Resolved') {
+                        matchesFilter = r.status === 'Resolved' || r.status === 'Resources Assigned';
+                      } else if (plannerFilter === 'Emergency') {
+                        matchesFilter = isCritical;
+                      }
+
+                      return matchesSearch && matchesFilter;
+                    })
+                    .sort((a, b) => {
+                      if (plannerSortBy === 'RiskScore') {
+                        return (b.priorityScore || 0) - (a.priorityScore || 0);
+                      }
+                      if (plannerSortBy === 'Priority') {
+                        const prioWeight = { 'Critical': 4, 'High': 3, 'Medium': 2, 'Low': 1 };
+                        return (prioWeight[b.severity] || 0) - (prioWeight[a.severity] || 0);
+                      }
+                      if (plannerSortBy === 'Cost') {
+                        return ((b.resourcePlan?.estimatedCost || 0) - (a.resourcePlan?.estimatedCost || 0));
+                      }
+                      if (plannerSortBy === 'Time') {
+                        return ((a.resourcePlan?.estimatedResolutionTime || 0) - (b.resourcePlan?.estimatedResolutionTime || 0));
+                      }
+                      if (plannerSortBy === 'Department') {
+                        return (a.assignedDepartment || '').localeCompare(b.assignedDepartment || '');
+                      }
+                      return 0;
+                    })
+                    .map(rep => {
+                      const isSelected = plannerSelectedReport && plannerSelectedReport.id === rep.id;
+                      return (
+                        <div
+                          key={rep.id}
+                          onClick={() => loadResourcePlanForReport(rep)}
+                          className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
+                            isSelected 
+                              ? 'bg-blue-50 dark:bg-blue-955/20 border-blue-200 dark:border-blue-900/40 ring-1 ring-blue-500/10' 
+                              : 'bg-slate-50/50 dark:bg-slate-955/30 border-slate-200 dark:border-slate-850/60 hover:border-slate-300 dark:hover:border-slate-800'
+                          }`}
+                        >
+                          <div className="flex justify-between items-start gap-1">
+                            <h4 className="text-[11px] font-black text-slate-800 dark:text-white uppercase tracking-wider line-clamp-1">{rep.title}</h4>
+                            <span className={`text-[8px] font-bold px-1.5 py-0.2 rounded border ${
+                              rep.severity === 'Critical' 
+                                ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20' 
+                                : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
+                            }`}>
+                              {rep.severity}
+                            </span>
+                          </div>
+                          <p className="text-[9px] text-slate-400 dark:text-slate-500 mt-1 block truncate">{rep.location}</p>
+                          <div className="flex justify-between items-center mt-2 text-[8px] font-semibold text-slate-450 uppercase pt-1 border-t border-slate-200 dark:border-slate-900">
+                            <span>{rep.category}</span>
+                            <span className={`font-black ${rep.status === 'Resolved' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500'}`}>{rep.status}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+
+              {/* Right Column: AI Plan Recommendations */}
+              <div className="flex-1 flex flex-col overflow-hidden bg-slate-50/30 dark:bg-slate-955/20 border border-slate-200 dark:border-slate-900 rounded-2xl p-5 relative">
+                
+                {plannerLoading ? (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/80 dark:bg-slate-955/80 backdrop-blur-xs space-y-3 z-10">
+                    <Loader className="w-8 h-8 text-blue-500 animate-spin" />
+                    <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">{t("Generating Optimal Resource Plan...")}</span>
+                  </div>
+                ) : null}
+
+                {!plannerSelectedReport ? (
+                  <div className="flex-1 flex flex-col items-center justify-center text-center text-slate-400 dark:text-slate-550 space-y-2">
+                    <Sparkles className="w-8 h-8 text-slate-300 dark:text-slate-700" />
+                    <span className="text-xs font-bold uppercase tracking-widest">{t("Select an incident to review plan recommendations")}</span>
+                  </div>
+                ) : (
+                  <div className="flex-1 flex flex-col overflow-hidden space-y-4">
+                    
+                    {/* Plan Header details */}
+                    <div className="flex justify-between items-start gap-4 border-b border-slate-200 dark:border-slate-900 pb-3">
+                      <div>
+                        <span className="text-[9px] text-blue-600 dark:text-blue-400 font-bold uppercase tracking-wider block">{plannerSelectedReport.category}</span>
+                        <h4 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-wider mt-0.5">{plannerSelectedReport.title}</h4>
+                        <span className="text-[10px] text-slate-400 dark:text-slate-450 font-semibold block">{plannerSelectedReport.location}</span>
+                      </div>
+
+                      {plannerReportPlan ? (
+                        <div className="flex items-center gap-2">
+                          <div className="px-2.5 py-1 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 rounded-xl text-center">
+                            <span className="text-[8px] font-extrabold uppercase block leading-none">{t("AI Confidence")}</span>
+                            <span className="text-xs font-black">{plannerReportPlan.confidenceScore}%</span>
+                          </div>
+                          <div className={`px-2.5 py-1 rounded-xl border text-center ${
+                            plannerSelectedReport.status === 'Resolved'
+                              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                              : plannerSelectedReport.status === 'Resources Assigned' 
+                                ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20' 
+                                : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
+                          }`}>
+                            <span className="text-[8px] font-extrabold uppercase block leading-none">{t("Status")}</span>
+                            <span className="text-xs font-black">{plannerSelectedReport.status}</span>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+
+                    {/* Scrollable details form */}
+                    <div className="flex-1 overflow-y-auto space-y-4 pr-1.5 scrollbar-thin text-xs text-left">
+                      
+                      {plannerReportPlan && plannerReportPlan.emergencyActions && (
+                        <div className="p-3.5 bg-rose-500/5 border border-rose-500/15 rounded-xl space-y-2">
+                          <span className="text-[9px] font-black text-rose-600 dark:text-rose-400 uppercase tracking-widest flex items-center gap-1">
+                            <ShieldAlert className="w-3.5 h-3.5 text-rose-500 animate-pulse" />
+                            <span>EMERGENCY RESPONSE MODE DETECTED</span>
+                          </span>
+                          <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed font-semibold">
+                            {t("This incident is classified as Critical. Displaying pre-planned response operations.")}
+                          </p>
+                          <ul className="list-disc list-inside text-[9px] text-slate-600 dark:text-slate-350 space-y-1">
+                            {plannerReportPlan.emergencyActions.map((act, i) => (
+                              <li key={i}>{act}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {plannerReportPlan ? (
+                        <div className="space-y-4">
+                          
+                          {/* Plan Parameters details */}
+                          {!editPlanMode ? (
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="p-3 bg-slate-100/60 dark:bg-slate-955/40 border border-slate-200 dark:border-slate-850 rounded-xl">
+                                <span className="text-[8px] font-extrabold text-slate-400 dark:text-slate-500 uppercase block">{t("Recommended Department")}</span>
+                                <span className="text-xs font-black text-slate-800 dark:text-slate-300">{plannerReportPlan.department}</span>
+                              </div>
+                              <div className="p-3 bg-slate-100/60 dark:bg-slate-955/40 border border-slate-200 dark:border-slate-850 rounded-xl">
+                                <span className="text-[8px] font-extrabold text-slate-400 dark:text-slate-500 uppercase block">{t("Assigned Working Team")}</span>
+                                <span className="text-xs font-black text-slate-800 dark:text-slate-300">{plannerReportPlan.teamName}</span>
+                              </div>
+                              <div className="p-3 bg-slate-100/60 dark:bg-slate-955/40 border border-slate-200 dark:border-slate-850 rounded-xl">
+                                <span className="text-[8px] font-extrabold text-slate-400 dark:text-slate-500 uppercase block">{t("Number of Personnel")}</span>
+                                <span className="text-xs font-black text-slate-800 dark:text-slate-300">{plannerReportPlan.personnelCount} {t("Workers")}</span>
+                              </div>
+                              <div className="p-3 bg-slate-100/60 dark:bg-slate-955/40 border border-slate-200 dark:border-slate-850 rounded-xl">
+                                <span className="text-[8px] font-extrabold text-slate-400 dark:text-slate-500 uppercase block">{t("Estimated Resolution Time")}</span>
+                                <span className="text-xs font-black text-slate-800 dark:text-slate-300">{plannerReportPlan.estimatedResolutionTime} {t("Hours")}</span>
+                              </div>
+                              <div className="p-3 bg-slate-100/60 dark:bg-slate-955/40 border border-slate-200 dark:border-slate-850 rounded-xl">
+                                <span className="text-[8px] font-extrabold text-slate-400 dark:text-slate-500 uppercase block">{t("Equipment & Vehicles Needed")}</span>
+                                <span className="text-xs font-black text-slate-800 dark:text-slate-300 block truncate">{plannerReportPlan.equipment}</span>
+                              </div>
+                              <div className="p-3 bg-slate-100/60 dark:bg-slate-955/40 border border-slate-200 dark:border-slate-850 rounded-xl">
+                                <span className="text-[8px] font-extrabold text-slate-400 dark:text-slate-500 uppercase block">{t("Estimated Budget / Cost")}</span>
+                                <span className="text-xs font-black text-emerald-600 dark:text-emerald-455">₹{plannerReportPlan.estimatedCost.toLocaleString()}</span>
+                              </div>
+                              <div className="p-3 bg-slate-100/60 dark:bg-slate-955/40 border border-slate-200 dark:border-slate-850 rounded-xl">
+                                <span className="text-[8px] font-extrabold text-slate-400 dark:text-slate-500 uppercase block">{t("Priority Level")}</span>
+                                <span className="text-xs font-black text-slate-800 dark:text-slate-300">{plannerReportPlan.priority}</span>
+                              </div>
+                              <div className="p-3 bg-slate-100/60 dark:bg-slate-955/40 border border-slate-200 dark:border-slate-850 rounded-xl">
+                                <span className="text-[8px] font-extrabold text-slate-400 dark:text-slate-500 uppercase block">{t("Expected Completion Time")}</span>
+                                <span className="text-xs font-black text-slate-800 dark:text-slate-300">{plannerReportPlan.expectedCompletionTime}</span>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="space-y-3 bg-slate-100/60 dark:bg-slate-955/30 border border-slate-200 dark:border-slate-850 p-4 rounded-xl">
+                              <h5 className="text-[10px] font-black text-slate-800 dark:text-white uppercase tracking-widest border-b border-slate-200 dark:border-slate-900 pb-1.5 mb-2">{t("Modify Resource Allocation Plan")}</h5>
+                              
+                              <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1">
+                                  <label className="text-[8px] font-extrabold text-slate-400 dark:text-slate-500 uppercase block">{t("Assigned Department")}</label>
+                                  <input
+                                    type="text"
+                                    value={editPlanData.department}
+                                    onChange={(e) => setEditPlanData({ ...editPlanData, department: e.target.value })}
+                                    className="w-full bg-white dark:bg-slate-955 border border-slate-200 dark:border-slate-850 rounded-lg px-2 py-1 text-xs text-slate-800 dark:text-white focus:outline-none focus:border-blue-500"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[8px] font-extrabold text-slate-400 dark:text-slate-500 uppercase block">{t("Personnel Count")}</label>
+                                  <input
+                                    type="number"
+                                    value={editPlanData.personnelCount}
+                                    onChange={(e) => setEditPlanData({ ...editPlanData, personnelCount: e.target.value })}
+                                    className="w-full bg-white dark:bg-slate-955 border border-slate-200 dark:border-slate-850 rounded-lg px-2 py-1 text-xs text-slate-800 dark:text-white focus:outline-none focus:border-blue-500"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[8px] font-extrabold text-slate-400 dark:text-slate-500 uppercase block">{t("Estimated Budget (Rupees)")}</label>
+                                  <input
+                                    type="number"
+                                    value={editPlanData.estimatedCost}
+                                    onChange={(e) => setEditPlanData({ ...editPlanData, estimatedCost: e.target.value })}
+                                    className="w-full bg-white dark:bg-slate-955 border border-slate-200 dark:border-slate-850 rounded-lg px-2 py-1 text-xs text-slate-800 dark:text-white focus:outline-none focus:border-blue-500"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[8px] font-extrabold text-slate-400 dark:text-slate-500 uppercase block">{t("Expected Completion Time")}</label>
+                                  <input
+                                    type="text"
+                                    value={editPlanData.expectedCompletionTime}
+                                    onChange={(e) => setEditPlanData({ ...editPlanData, expectedCompletionTime: e.target.value })}
+                                    className="w-full bg-white dark:bg-slate-955 border border-slate-200 dark:border-slate-850 rounded-lg px-2 py-1 text-xs text-slate-800 dark:text-white focus:outline-none focus:border-blue-500"
+                                  />
+                                </div>
+                                <div className="space-y-1 col-span-2">
+                                  <label className="text-[8px] font-extrabold text-slate-400 dark:text-slate-500 uppercase block">{t("Priority Level")}</label>
+                                  <select
+                                    value={editPlanData.priority}
+                                    onChange={(e) => setEditPlanData({ ...editPlanData, priority: e.target.value })}
+                                    className="w-full bg-white dark:bg-slate-955 border border-slate-200 dark:border-slate-850 rounded-lg px-2 py-1 text-xs text-slate-800 dark:text-slate-350 focus:outline-none focus:border-blue-500"
+                                  >
+                                    <option value="Low">Low</option>
+                                    <option value="Medium">Medium</option>
+                                    <option value="High">High</option>
+                                    <option value="Critical">Critical</option>
+                                  </select>
+                                </div>
+                                <div className="space-y-1 col-span-2">
+                                  <label className="text-[8px] font-extrabold text-slate-400 dark:text-slate-500 uppercase block">{t("Officer Allocation Remarks")}</label>
+                                  <textarea
+                                    value={editPlanData.remarks}
+                                    onChange={(e) => setEditPlanData({ ...editPlanData, remarks: e.target.value })}
+                                    placeholder={t("Add dispatch remarks, adjustments logic...")}
+                                    className="w-full bg-white dark:bg-slate-955 border border-slate-200 dark:border-slate-850 rounded-lg px-2 py-1 text-xs text-slate-800 dark:text-white focus:outline-none focus:border-blue-500 h-14 resize-none"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* AI Reasoning */}
+                          <div className="p-3.5 bg-blue-500/5 border border-blue-500/10 rounded-xl space-y-1">
+                            <span className="text-[8px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest flex items-center gap-1">
+                              <Cpu className="w-3 h-3" />
+                              <span>AI STRATEGIC REASONING ANALYSIS</span>
+                            </span>
+                            <p className="text-[10px] text-slate-650 dark:text-slate-350 leading-relaxed">{plannerReportPlan.reasoning}</p>
+                          </div>
+
+                        </div>
+                      ) : null}
+
+                    </div>
+
+                    {/* Actions block at bottom */}
+                    {plannerReportPlan ? (
+                      <div className="flex gap-2.5 pt-3 border-t border-slate-200 dark:border-slate-900">
+                        {editPlanMode ? (
+                          <>
+                            <button
+                              onClick={() => setEditPlanMode(false)}
+                              className="flex-1 py-2 bg-slate-100 hover:bg-slate-250 dark:bg-slate-900 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                            >
+                              {t("Cancel")}
+                            </button>
+                            <button
+                              onClick={() => handleApproveResourcePlan(plannerSelectedReport, plannerReportPlan, plannerReportPlan.emergencyActions !== undefined)}
+                              className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black transition-all cursor-pointer shadow-md"
+                            >
+                              {t("Save & Approve Plan")}
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            {plannerSelectedReport.status === 'Resolved' ? (
+                              <span className="w-full text-center text-xs font-extrabold text-emerald-650 dark:text-emerald-400 uppercase py-2 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-250 dark:border-emerald-900/40 rounded-xl flex items-center justify-center gap-1.5">
+                                <ShieldCheck className="w-4 h-4" />
+                                <span>{t("Issue Successfully Resolved")}</span>
+                              </span>
+                            ) : plannerSelectedReport.status !== 'Resources Assigned' ? (
+                              <>
+                                <button
+                                  onClick={() => handleRejectResourcePlan(plannerSelectedReport)}
+                                  className="py-2 px-4 bg-slate-100 hover:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-rose-600 dark:text-rose-455 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                                >
+                                  {t("Reject Plan")}
+                                </button>
+                                
+                                <button
+                                  onClick={() => setEditPlanMode(true)}
+                                  className="py-2 px-4 bg-slate-100 hover:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                                >
+                                  {t("Modify Plan")}
+                                </button>
+
+                                {plannerReportPlan.emergencyActions ? (
+                                  <button
+                                    onClick={() => handleApproveResourcePlan(plannerSelectedReport, plannerReportPlan, true)}
+                                    className="flex-1 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-black transition-all cursor-pointer shadow-md animate-pulse"
+                                  >
+                                    {t("Approve Emergency Response")}
+                                  </button>
+                                ) : (
+                                  <button
+                                    onClick={() => handleApproveResourcePlan(plannerSelectedReport, plannerReportPlan, false)}
+                                    className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black transition-all cursor-pointer shadow-md"
+                                  >
+                                    {t("Approve Allocation Plan")}
+                                  </button>
+                                )}
+                              </>
+                            ) : (
+                              <span className="w-full text-center text-xs font-bold text-slate-500 uppercase py-2 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded-xl">
+                                {t("Resource Plan Active & Deployed")}
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    ) : null}
+
+                  </div>
+                )}
+
+              </div>
+            </div>
+
           </div>
         </div>
       )}

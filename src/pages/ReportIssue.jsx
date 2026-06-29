@@ -28,6 +28,42 @@ export default function ReportIssue() {
   const [imageFile, setImageFile] = useState(null);
   const [lat, setLat] = useState(12.9716);
   const [lng, setLng] = useState(77.5946);
+  const [suggestions, setSuggestions] = useState([]);
+  const [searchingSuggestions, setSearchingSuggestions] = useState(false);
+  const [selectedSuggestionName, setSelectedSuggestionName] = useState('');
+  
+  // Fetch Autocomplete Suggestions from OSM Nominatim API
+  const fetchLocationSuggestions = async (text) => {
+    if (!text || text.trim().length < 3) {
+      setSuggestions([]);
+      return;
+    }
+    setSearchingSuggestions(true);
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(text)}&limit=5&addressdetails=1`,
+        { headers: { 'Accept-Language': 'en' } }
+      );
+      const data = await response.json();
+      setSuggestions(data || []);
+    } catch (err) {
+      console.error("Failed to fetch suggestions:", err);
+    } finally {
+      setSearchingSuggestions(false);
+    }
+  };
+
+  useEffect(() => {
+    const delayDebounce = setTimeout(() => {
+      if (location && location !== selectedSuggestionName) {
+        fetchLocationSuggestions(location);
+      } else if (!location) {
+        setSuggestions([]);
+      }
+    }, 400);
+
+    return () => clearTimeout(delayDebounce);
+  }, [location]);
   
   // AI/Gemini States
   const [aiAnalyzing, setAiAnalyzing] = useState(false);
@@ -353,15 +389,48 @@ export default function ReportIssue() {
                 required
                 placeholder={t("e.g. Corner of Elm and 5th Ave")}
                 value={location}
-                onChange={(e) => setLocation(e.target.value)}
+                onChange={(e) => {
+                  setLocation(e.target.value);
+                  if (e.target.value !== selectedSuggestionName) {
+                    setSelectedSuggestionName('');
+                  }
+                }}
                 className="w-full px-4 py-3 bg-slate-900 border border-slate-800 rounded-xl text-slate-200 text-sm placeholder-slate-500 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-colors"
+                autoComplete="off"
               />
+              
+              {/* Autocomplete Suggestions Dropdown Menu */}
+              {suggestions.length > 0 && (
+                <div className="absolute left-0 right-0 z-30 mt-1 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-2xl max-h-48 overflow-y-auto">
+                  {suggestions.map((sug, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => {
+                        const displayName = sug.display_name;
+                        const latitude = parseFloat(sug.lat);
+                        const longitude = parseFloat(sug.lon);
+                        setLocation(displayName);
+                        setSelectedSuggestionName(displayName);
+                        setLat(latitude);
+                        setLng(longitude);
+                        setSuggestions([]);
+                      }}
+                      className="px-4 py-2.5 hover:bg-slate-800 text-xs text-slate-200 cursor-pointer border-b border-slate-800/40 last:border-0 leading-normal text-left transition-colors"
+                    >
+                      {sug.display_name}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             
             <MapSelector 
               locationText={location}
+              lat={lat}
+              lng={lng}
               onLocationSelect={(address, latitude, longitude) => {
                 setLocation(address);
+                setSelectedSuggestionName(address);
                 if (latitude && longitude) {
                   setLat(latitude);
                   setLng(longitude);

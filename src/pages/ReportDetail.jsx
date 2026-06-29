@@ -2,12 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { 
-  fetchReportById, updateReport, voteReport, addComment, updateComment 
+  fetchReportById, updateReport, voteReport, addComment, updateComment, deleteReport 
 } from '../services/api';
 import { 
   ArrowLeft, Calendar, MapPin, MessageSquare, Share2, 
   Edit3, X, AlertCircle, CheckCircle2, ChevronUp, 
-  ChevronDown, Send, User, Loader 
+  ChevronDown, Send, User, Loader, Trash2 
 } from 'lucide-react';
 import { formatDate } from '../utils/helpers';
 import { useTranslation } from '../context/TranslationContext';
@@ -306,6 +306,20 @@ export default function ReportDetail() {
     }
   };
 
+  const handleDelete = async () => {
+    if (!window.confirm(t('Are you sure you want to delete this civic report? This action cannot be undone.'))) return;
+    try {
+      await deleteReport(report.id);
+      triggerToast(t('Report deleted successfully!'));
+      setTimeout(() => {
+        navigate(-1);
+      }, 1000);
+    } catch (err) {
+      console.error(err);
+      triggerToast(t('Failed to delete report.'));
+    }
+  };
+
   const triggerToast = (msg) => {
     setSuccessMsg(msg);
     setTimeout(() => setSuccessMsg(''), 3000);
@@ -377,14 +391,25 @@ export default function ReportDetail() {
             <span>{t("Share Link")}</span>
           </button>
 
-          {user && report.userId === user.uid && report.status !== 'Resolved' && (
-            <button 
-              onClick={() => setEditing(true)} 
-              className="flex items-center gap-1.5 text-xs font-bold text-blue-400 hover:text-blue-300 cursor-pointer transition-colors bg-slate-900/30 border border-blue-950 px-3.5 py-1.5 rounded-xl"
-            >
-              <Edit3 className="w-4 h-4" />
-              <span>{t("Edit Details")}</span>
-            </button>
+          {user && report.userId === user.uid && (
+            <div className="flex items-center gap-3">
+              {report.status !== 'Resolved' && (
+                <button 
+                  onClick={() => setEditing(true)} 
+                  className="flex items-center gap-1.5 text-xs font-bold text-blue-400 hover:text-blue-300 cursor-pointer transition-colors bg-slate-900/30 border border-blue-950 px-3.5 py-1.5 rounded-xl"
+                >
+                  <Edit3 className="w-4 h-4" />
+                  <span>{t("Edit Details")}</span>
+                </button>
+              )}
+              <button 
+                onClick={handleDelete} 
+                className="flex items-center gap-1.5 text-xs font-bold text-rose-455 hover:text-rose-350 cursor-pointer transition-colors bg-slate-900/30 border border-rose-950 px-3.5 py-1.5 rounded-xl"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>{t("Delete Report")}</span>
+              </button>
+            </div>
           )}
         </div>
       </div>

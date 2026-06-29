@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Loader, MapPin } from 'lucide-react';
 
-export default function MapSelector({ onLocationSelect, locationText }) {
+export default function MapSelector({ onLocationSelect, locationText, lat, lng }) {
   const mapRef = useRef(null);
   const leafletMap = useRef(null);
   const markerRef = useRef(null);
@@ -90,6 +90,18 @@ export default function MapSelector({ onLocationSelect, locationText }) {
       });
     }
   }, [loading, error]);
+
+  useEffect(() => {
+    if (loading || error || !window.L || !leafletMap.current || !markerRef.current) return;
+    if (lat && lng) {
+      const currentLatLng = markerRef.current.getLatLng();
+      if (currentLatLng.lat !== lat || currentLatLng.lng !== lng) {
+        leafletMap.current.setView([lat, lng], 15);
+        markerRef.current.setLatLng([lat, lng]);
+        lastGeocodedText.current = locationText;
+      }
+    }
+  }, [lat, lng, loading, error]);
 
   useEffect(() => {
     if (!locationText || !leafletMap.current || !markerRef.current || !window.L) return;
