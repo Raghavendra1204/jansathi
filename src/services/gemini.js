@@ -59,7 +59,7 @@ function localMockClassifier(title, description) {
  */
 function localMockChatResponder(history) {
   if (!history || history.length === 0) {
-    return "Hello! I am your Jaan Sathi helper. Ask me about reporting issues or finding missions.";
+    return "Hello! I am your Jan Sathi helper. Ask me about reporting issues or finding missions.";
   }
   
   const lastUserMessage = history[history.length - 1].text.toLowerCase();
@@ -76,7 +76,7 @@ function localMockChatResponder(history) {
   if (lastUserMessage.includes('officer') || lastUserMessage.includes('approve') || lastUserMessage.includes('dashboard')) {
     return "Government Officers can access the 'Officer Dashboard' to verify citizen claims and disburse community points.";
   }
-  return "I am here to help you navigate Jaan Sathi! Ask me about reporting issues, joining volunteer missions, or earning community points.";
+  return "I am here to help you navigate Jan Sathi! Ask me about reporting issues, joining volunteer missions, or earning community points.";
 }
 
 /**
@@ -129,7 +129,7 @@ export async function chatWithGemini(history) {
   try {
     const model = genAI.getGenerativeModel({
       model: 'gemini-2.5-flash',
-      systemInstruction: "You are the Jaan Sathi Assistant, an AI helper for the Jaan Sathi municipal portal. Your job is to help citizens and government officers navigate the platform. Citizens can report issues (roads, infrastructure, sanitation), join volunteer missions, and track their stats (XP, levels). Keep your answers helpful, friendly, and concise."
+      systemInstruction: "You are the Jan Sathi Assistant, an AI helper for the Jan Sathi municipal portal. Your job is to help citizens and government officers navigate the platform. Citizens can report issues (roads, infrastructure, sanitation), join volunteer missions, and track their stats (XP, levels). Keep your answers helpful, friendly, and concise."
     });
 
     // Format chat history for Gemini API
@@ -180,7 +180,7 @@ function localMockOfficerChatResponder(history, reports) {
       (sanitationIssues.length > 0 ? `Nearest one is at "${sanitationIssues[0].location}".` : "The sanitation queue is clear!");
   }
   if (userText.includes('summary') || userText.includes('overview')) {
-    return `Jaan Sathi Executive Summary: We have ${reports.length} total registered reports. ${pendingClaims} are awaiting dispatch review, ${inProgressClaims} are actively in progress, and ${resolvedClaims} have been resolved successfully. AI has predicted a high priority for Ward 17.`;
+    return `Jan Sathi Executive Summary: We have ${reports.length} total registered reports. ${pendingClaims} are awaiting dispatch review, ${inProgressClaims} are actively in progress, and ${resolvedClaims} have been resolved successfully. AI has predicted a high priority for Ward 17.`;
   }
   return "I can read your database in real time. Try asking: 'What is the highest priority issue?', 'Show department workloads', 'How many sanitation complaints are pending?', or 'Give me a summary report'.";
 }
@@ -197,7 +197,7 @@ export async function officerChatWithGemini(history, reports) {
   try {
     const model = genAI.getGenerativeModel({
       model: 'gemini-2.5-flash',
-      systemInstruction: `You are the Jaan Sathi Smart Operations Assistant for Municipal Government Officers. 
+      systemInstruction: `You are the Jan Sathi Smart Operations Assistant for Municipal Government Officers. 
 Your job is to help officers analyze incoming citizen reports, coordinate dispatches, check workloads, and summarize active city alerts.
 You have real-time access to the active reports database of the city. Use the reports array provided to answer the officer's questions accurately with actual figures and details. 
 Keep your answers brief, analytical, and professional.`
@@ -355,7 +355,7 @@ export async function findDuplicateReportsWithGemini(reports) {
   }
 
   try {
-    const prompt = `You are the Jaan Sathi Duplicate Classifier Agent. Your task is to analyze the active municipal issues database and cluster reports that represent the exact same physical issue (duplicates).
+    const prompt = `You are the Jan Sathi Duplicate Classifier Agent. Your task is to analyze the active municipal issues database and cluster reports that represent the exact same physical issue (duplicates).
     
 For each duplicate group found, provide:
 1. A descriptive title for the issue.
@@ -524,7 +524,7 @@ export async function analyzePredictiveRisksWithGemini(reports) {
   }
 
   try {
-    const prompt = `You are the Jaan Sathi Predictive Risk Analyzer Agent. Your task is to calculate a Risk Score (1-100) and forecast municipal hazards for active reports based on:
+    const prompt = `You are the Jan Sathi Predictive Risk Analyzer Agent. Your task is to calculate a Risk Score (1-100) and forecast municipal hazards for active reports based on:
 1. Incident Density: Cluster of similar nearby issues.
 2. Time Pattern: Escalation (today vs previous days).
 3. Infrastructure Proximity: Proximity to hospitals, schools, metro stations, highways, airports, power plants, etc.
@@ -656,7 +656,7 @@ export async function generateResourcePlanWithGemini(report) {
 
   try {
     const isCritical = report.severity === 'Critical' || (report.priorityScore && report.priorityScore >= 75);
-    const prompt = `You are the Jaan Sathi Resource Planner Agent. Your job is to automatically recommend the optimal resources required to resolve a municipal incident.
+    const prompt = `You are the Jan Sathi Resource Planner Agent. Your job is to automatically recommend the optimal resources required to resolve a municipal incident.
     
 Here are the incident details:
 - Title: ${report.title}
@@ -725,3 +725,229 @@ export async function translateTextWithGemini(text, targetLang) {
     return text;
   }
 }
+
+/**
+ * Local rule-based keyword fallback moderation.
+ */
+export function localMockModeration(text) {
+  const lower = (text || '').toLowerCase();
+  const badWords = ['abuse', 'spam', 'scam', 'kill', 'fake', 'explicit', 'stupid', 'idiot', 'crap', 'garbage', 'f***', 'sh**', 'bastard'];
+  const foundBad = badWords.filter(word => lower.includes(word));
+  
+  const isExplicit = foundBad.length > 0;
+  let flags = [];
+  if (isExplicit) {
+    if (lower.includes('spam') || lower.includes('scam')) flags.push('Spam / Scam');
+    if (lower.includes('fake')) flags.push('Fake Report Warning');
+    if (foundBad.some(w => ['abuse', 'stupid', 'idiot', 'crap', 'garbage', 'bastard'].includes(w))) flags.push('Abusive Language');
+    if (lower.includes('kill')) flags.push('Harassment / Threat');
+    if (flags.length === 0) flags.push('Explicit Language');
+  }
+
+  let sentiment = 'Neutral';
+  if (isExplicit) {
+    sentiment = 'Negative';
+  } else if (lower.includes('good') || lower.includes('great') || lower.includes('thank') || lower.includes('awesome') || lower.includes('happy') || lower.includes('solved') || lower.includes('resolved')) {
+    sentiment = 'Positive';
+  }
+
+  return {
+    sentiment,
+    isExplicit,
+    flags,
+    confidence: isExplicit ? 95 : 88,
+    reasoning: isExplicit ? `Detected flagged keywords: ${foundBad.join(', ')}` : "No explicit keywords or spam indicators found in text analysis."
+  };
+}
+
+/**
+ * AI Content Moderation service for Agent 7 & 8 using Gemini.
+ */
+export async function analyzeModerationWithGemini(text) {
+  if (isMockGemini || !genAI) {
+    return localMockModeration(text);
+  }
+  try {
+    const prompt = `You are Jan Sathi Content Moderation Agent (Agent 7 & 8).
+Your task is to analyze the following user post or comment for citizen sentiment and spam/explicit language.
+Analyze if it contains spam, scams, explicit or abusive language, bad words, threats, or harassment.
+
+Text to analyze: "${text}"
+
+Respond with ONLY a clean JSON object containing the following keys:
+- "sentiment": string ("Positive", "Neutral", "Negative")
+- "isExplicit": boolean (true if explicit, spam, scam, abusive, bad language, or threat)
+- "flags": array of strings (e.g. ["Abusive Language", "Spam", "Threat"] or empty array if safe)
+- "confidence": number (1-100)
+- "reasoning": string (very brief explanation)
+
+Do not include markdown code block formatting (like \`\`\`json) or any other text.`;
+
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const jsonText = response.text().trim().replace(/^```json\s*|```$/g, '');
+    return JSON.parse(jsonText);
+  } catch (error) {
+    console.error("Gemini Content Moderation failed, using fallback:", error);
+    return localMockModeration(text);
+  }
+}
+
+/**
+ * Local offline rule-based report content generator fallback.
+ */
+export function localMockReportText(reportType, reportData, filters) {
+  let executiveSummary = `This executive operations summary analyzes municipal data for the "${reportType}" period. Initial telemetry indicates normal caseloads, with municipal services actively responding to public demands. Resource deployments show active teams coordinating across primary districts, with minor queue density in utility works.`;
+  
+  let aiInsights = `Case metrics show varying resolution speed across departments. Infrastructure and Roads & Safety comprise the largest ticket share, followed by Sanitation. Resource costs aggregate under approved schedules, maintaining standard budget bounds. Department performance indicators suggest a 4.2% efficiency optimization opportunity through strategic task-merging.`;
+
+  let aiRecommendations = [
+    "Deploy additional drainage and utility maintenance teams to high-volume zones.",
+    "Escalate unresolved citizen complaints exceeding standard SLA timers.",
+    "Optimize vehicle dispatches by grouping proximate tasks within active wards.",
+    "Allocate preventive maintenance budget reserves for upcoming utility clearing cycles.",
+    "Coordinate joint operations between Water Board and Roads department on overlapping pipelines."
+  ];
+
+  let conclusion = `In conclusion, targeted staff reallocations and proactive asset inspections in high-priority zones will sustain city operational efficiency.`;
+
+  // Custom responses based on reportType
+  if (reportType.includes("Smart City Health")) {
+    executiveSummary = "The Smart City Health Assessment indicates a stable municipal health index, with strong scores in sanitation and community participation offset by infrastructure maintenance bottlenecks.";
+    aiInsights = "Roads & Safety and Utility grids experience the highest delays. Sanitation and Environment divisions hold strong marks, driving the overall city health index positively.";
+    aiRecommendations = [
+      "Target localized paving dispatches to critical roadway corridors.",
+      "Initiate smart sensor deployments for sewer overflow warning alerts.",
+      "Accelerate streetlight panel upgrades in high-traffic wards.",
+      "Optimize sanitation dispatch logs to resolve dumpster overflow points.",
+      "Conduct emergency response readiness drills with ward engineers."
+    ];
+  } else if (reportType.includes("Budget & Cost")) {
+    executiveSummary = "This budget and expenditure summary assesses incident resolution costs, team resource costs, and emergency dispatches.";
+    aiInsights = "Emergency repairs for high-severity cases account for 42% of total operational expenditure. Standard paving and cleaning dispatches remain cost-effective.";
+    aiRecommendations = [
+      "Perform preventive maintenance on electrical grids to avoid high emergency costs.",
+      "Transition minor utility tasks to local volunteer forces to save labor costs.",
+      "Consolidate multiple equipment rentals into centralized department leases.",
+      "Introduce cost-matching algorithms to optimize private vendor selections.",
+      "Implement a strict cost-approval threshold for non-critical dispatches."
+    ];
+  } else if (reportType.includes("Predictive Risk")) {
+    executiveSummary = "Predictive Risk AI flags elevation of risk levels in infrastructure and safety sectors, mapping potential incident clusters.";
+    aiInsights = "Historical reports, upvote speed, and weather parameters point to an elevated probability of pipe bursts and streetlight failures in Ward 12.";
+    aiRecommendations = [
+      "Redirect municipal water engineers to conduct pipeline thickness tests.",
+      "Deploy warning sensors to high-probability structural stress points.",
+      "Pre-position power grid replacement units near predicted outage zones.",
+      "Notify local police divisions of elevated traffic hazard spots.",
+      "Increase public awareness briefings on regional storm predictions."
+    ];
+  } else if (reportType.includes("Community Engagement")) {
+    executiveSummary = "The Community Engagement Report reviews citizen activity, volunteer mission enrollments, and citizen reputation metrics.";
+    aiInsights = "Active citizen participation has risen by 15%, driven by active campaigns and competitive reputation leaderboards.";
+    aiRecommendations = [
+      "Introduce special badge incentives for top local contributors.",
+      "Establish partnership portals with local NGOs for weekly cleanups.",
+      "Automate reward verification for completed citizen missions.",
+      "Increase high-XP campaigns in under-represented neighborhoods.",
+      "Publish leaderboard standouts on the public dashboard feed."
+    ];
+  }
+
+  return {
+    executiveSummary,
+    aiInsights,
+    aiRecommendations,
+    conclusion
+  };
+}
+
+/**
+ * AI Executive Report Generator for Agent 9 using Gemini.
+ */
+export async function generateExecutiveReportWithGemini(reportType, reportData, filters) {
+  if (isMockGemini || !genAI) {
+    return localMockReportText(reportType, reportData, filters);
+  }
+  try {
+    const prompt = `You are the Jan Sathi Executive Report Generator Agent (Agent 9).
+Your job is to write a highly professional, government-grade executive report analysis based on real-time municipal data.
+
+Report Type: ${reportType}
+Report Period / Filters: ${JSON.stringify(filters)}
+Compiled Telemetry Data: ${JSON.stringify(reportData)}
+
+Your output must be a clean, structured JSON object with the following keys:
+- "executiveSummary": string (a comprehensive 1-2 paragraph briefing summarizing current status, major updates, or concerns)
+- "aiInsights": string (detailed analytical observations and trends about department workloads, budget spending, or infrastructure health)
+- "aiRecommendations": array of exactly 5 strings (a list of "Top 5 Recommended Actions" that are highly actionable, specific, and directly relevant to the data and report type)
+- "conclusion": string (final remarks and a sign-off summary for municipal commissioners/officers)
+
+Make sure the writing style is formal, clear, authoritative, and reads like an official government briefing.
+Do not include markdown code block formatting (like \`\`\`json) or any other text. Respond with ONLY the raw JSON object.`;
+
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const jsonText = response.text().trim().replace(/^```json\s*|```$/g, '');
+    return JSON.parse(jsonText);
+  } catch (error) {
+    console.error("Gemini Executive Report failed, using local offline fallback:", error);
+    return localMockReportText(reportType, reportData, filters);
+  }
+}
+
+export async function generateAIInsightsWithGemini(reportsData) {
+  try {
+    if (!genAI) {
+      throw new Error("Gemini API not configured");
+    }
+
+    const summaryText = reportsData.map(r => `- [${r.severity}] ${r.title} in ${r.location} (Status: ${r.status}, Dept: ${r.assignedDepartment})`).join('\n');
+
+    const prompt = `You are the Jan Sathi AI City Intelligence Agent. Below is a list of active municipal complaints reported by citizens in Bengaluru:
+${summaryText}
+
+Please write a comprehensive, professional, and actionable city intelligence briefing for the municipal officer. Your response must include:
+1. **Executive Operations Brief**: A concise summary of the overall status of the city operations and incident queues.
+2. **Division Performance Overview**: Highlight any departments with high workloads or delayed SLAs.
+3. **Regional Risk Analysis**: Identify any wards/regions facing high density of hazards (critical sewers, dark streets, etc.).
+4. **Top 3 Recommended Actions**: Actionable, high-impact tasks the officer should execute next.
+
+Format your output in clean, professional markdown. Make sure the tone is formal, executive, and analytical.`;
+
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    return response.text();
+  } catch (error) {
+    console.error("Gemini AI Insights failed, using local fallback summary:", error);
+    
+    const total = reportsData.length;
+    const critical = reportsData.filter(r => r.severity === 'Critical').length;
+    const pending = reportsData.filter(r => r.status === 'Pending' || r.status === 'Submitted').length;
+    const roads = reportsData.filter(r => (r.assignedDepartment || '').toLowerCase().includes('road')).length;
+    const water = reportsData.filter(r => (r.assignedDepartment || '').toLowerCase().includes('water')).length;
+
+    return `### 🤖 Jan Sathi AI City Intelligence Briefing (Offline Mode)
+
+#### 1. Executive Operations Brief
+The municipal incident queue currently houses **${total} active reports**, with **${pending} tickets** pending dispatcher dispatch or resource approval. **${critical} critical severity events** require immediate tactical intervention to prevent community safety hazards.
+
+#### 2. Division Performance Overview
+- **Roads & Bridges**: Holds **${roads} active incidents**. Overlaps detected near Broadway Avenue.
+- **Water Board**: Managing **${water} leakage reports**. High pressure lines on Broadway require SLA acceleration.
+
+#### 3. Regional Risk Analysis
+- **Ward 17 (Indiranagar)**: Shows density cluster of sanitation and streetlight reports.
+- **Broadway Ave**: Dual sewage and water leakage points indicate regional utility network fatigue.
+
+#### 4. Top 3 Recommended Actions
+1. **Merge Duplicates**: Auto-merge Broadway water leakage tickets to release 12 dispatch hours.
+2. **Deploy Alpha Crew**: Dispatch Roads Team Alpha to Indiranagar sanitation cluster.
+3. **Escalate Criticals**: Review critical gas leak claims to meet the 18-hour SLA threshold.`;
+  }
+}
+
+

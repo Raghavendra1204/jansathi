@@ -210,3 +210,68 @@ html.light a.bg-slate-900:hover {
 .leaflet-tooltip-top.custom-map-tooltip::before {
   border-top-color: transparent !important;
 }
+
+/* Print Media Queries for Government Reports */
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+    font-size: 11pt !important;
+  }
+  
+  /* Hide the entire standard app wrapper and layouts */
+  #root, .no-print, header, aside, footer, nav, button, .chatbot-container, .leaflet-control-container {
+    display: none !important;
+  }
+
+  /* Show the printable report container only */
+  body > .printable-report-wrapper {
+    display: block !important;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    background: white !important;
+    color: black !important;
+  }
+
+  /* Prevent page breaks inside cards or sections */
+  .report-section {
+    page-break-inside: avoid;
+    break-inside: avoid;
+    margin-bottom: 2rem;
+  }
+  
+  /* Enable printing background colors and graphics */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
+
+@media screen {
+  .printable-report-wrapper {
+    display: none !important;
+  }
+}
+
+/* Entry Splash Animations */
+@keyframes loading-progress {
+  0% { width: 0%; }
+  100% { width: 100%; }
+}
+
+.animate-loading-progress {
+  animation: loading-progress 2.6s ease-in-out forwards;
+}
+
+@keyframes spin-slow {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 8s linear infinite;
+}

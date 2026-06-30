@@ -154,7 +154,7 @@ export default function EventDetail() {
 
   const remainingSpots = event.spotsTotal - event.spotsFilled;
   const isDeadlinePassed = new Date(event.date) < new Date();
-  const organizerContact = `${event.organizer.toLowerCase().replace(/\s+/g, '')}@jaansathi-ngo.org`;
+  const organizerContact = `${event.organizer.toLowerCase().replace(/\s+/g, '')}@JanSathi-ngo.org`;
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 space-y-6 animate-fade-in text-left">

@@ -102,11 +102,11 @@ export default function Sidebar() {
         
         {/* Branding Logo */}
         <Link to="/" className="flex items-center gap-2.5 group shrink-0" onClick={closeMobileMenu}>
-          <div className="p-2 bg-brand-500/10 rounded-xl group-hover:bg-brand-500/20 border border-brand-500/20 group-hover:border-brand-500/40 transition-all duration-300">
-            <Shield className="w-5 h-5 text-brand-400 group-hover:text-brand-300 group-hover:scale-105 transition-transform" />
+          <div className="p-1.5 bg-brand-500/10 rounded-xl group-hover:bg-brand-500/20 border border-brand-500/20 group-hover:border-brand-500/40 transition-all duration-300 shrink-0">
+            <img src="/logo.png" alt="JanSathi Logo" className="w-6 h-6 object-contain rounded-lg" />
           </div>
           <span className="font-extrabold text-base lg:text-lg tracking-tight text-white group-hover:text-slate-200 transition-colors">
-            Jaan<span className="text-brand-400 font-medium">Sathi</span>
+            Jan<span className="text-brand-400 font-medium">Sathi</span>
           </span>
         </Link>
 
@@ -246,7 +246,7 @@ export default function Sidebar() {
             <Shield className="w-4 h-4 text-brand-400" />
           </div>
           <span className="font-extrabold text-sm tracking-tight text-white">
-            Jaan<span className="text-brand-400 font-medium">Sathi</span>
+            Jan<span className="text-brand-400 font-medium">Sathi</span>
           </span>
         </Link>
 

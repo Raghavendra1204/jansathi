@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { 
   FileText, Clock, CheckCircle, Award, 
   MapPin, AlertTriangle, AlertCircle, PlusCircle, 
   Settings, Compass, Home as HomeIcon, MessageSquare, X,
-  ChevronDown, ChevronUp, Sparkles
+  ChevronDown, ChevronUp, Sparkles, Cpu, Share2, Edit3, Trash2,
+  Users, Wrench
 } from 'lucide-react';
 import { formatDate } from '../utils/helpers';
 import { useTranslation } from '../context/TranslationContext';
@@ -109,6 +110,14 @@ export default function CitizenDashboard() {
   const [selectedMapReport, setSelectedMapReport] = useState(null);
   const { t } = useTranslation();
 
+  const matchesStatusFilter = (r) => {
+    if (statusFilter === 'All') return true;
+    if (statusFilter === 'Pending') {
+      return r.status === 'Pending' || r.status === 'Resources Assigned' || r.status === 'Assigned' || r.status === 'In Progress';
+    }
+    return r.status === statusFilter;
+  };
+
   const [theme, setTheme] = useState(() => {
     return document.documentElement.classList.contains('dark') ? 'dark' : 'light';
   });
@@ -161,9 +170,17 @@ export default function CitizenDashboard() {
         }));
 
         if (updated) {
-          localStorage.setItem('jaan_sathi_reports', JSON.stringify(migratedData));
+          localStorage.setItem('jan_sathi_reports', JSON.stringify(migratedData));
         }
-        setReports(migratedData);
+        // Assign dynamic statusColor based on current status
+        const enrichedReports = migratedData.map(r => ({
+          ...r,
+          statusColor: r.status === 'Resolved' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+            : r.status === 'Pending' ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+            : r.status === 'Resources Assigned' || r.status === 'Assigned' || r.status === 'In Progress' ? 'bg-purple-500/10 text-purple-400 border-purple-500/30'
+            : r.statusColor || 'bg-blue-500/10 text-blue-400 border-blue-500/30'
+        }));
+        setReports(enrichedReports);
       } catch (err) {
         console.error("Failed to load reports:", err);
       }
@@ -284,7 +301,7 @@ export default function CitizenDashboard() {
 
       // Render markers
       reports
-        .filter(r => statusFilter === 'All' || r.status === statusFilter)
+        .filter(matchesStatusFilter)
         .forEach((report) => {
           if (!report.lat || !report.lng) return;
 
@@ -362,7 +379,7 @@ export default function CitizenDashboard() {
 
   const getStats = () => {
     const submitted = reports.filter(r => r.status === 'Submitted').length;
-    const pending = reports.filter(r => r.status === 'Pending').length;
+    const pending = reports.filter(r => r.status === 'Pending' || r.status === 'Resources Assigned' || r.status === 'Assigned' || r.status === 'In Progress').length;
     const resolved = reports.filter(r => r.status === 'Resolved').length;
     
     // Dynamic points calculation
@@ -532,7 +549,7 @@ export default function CitizenDashboard() {
                 {/* Map Top Header bar */}
                 <div className={`flex justify-between items-center z-10 backdrop-blur-md p-3 rounded-2xl border shadow-md transition-all duration-300 ${theme === 'light' ? 'bg-white/95 border-slate-200' : 'bg-slate-900/95 border-slate-800/50'}`}>
                   <div className="text-left">
-                    <span className={`text-[9px] font-black uppercase tracking-widest block transition-colors duration-300 ${theme === 'light' ? 'text-blue-600' : 'text-brand-400'}`}>{t("Jaan Sathi GIS Mapping")}</span>
+                    <span className={`text-[9px] font-black uppercase tracking-widest block transition-colors duration-300 ${theme === 'light' ? 'text-blue-600' : 'text-brand-400'}`}>{t("Jan Sathi GIS Mapping")}</span>
                     <span className={`text-[10px] font-bold block transition-colors duration-300 ${theme === 'light' ? 'text-blue-950/80' : 'text-slate-350'}`}>{t("Real-time GPS Incident Tracker (70km Limit)")}</span>
                   </div>
                   
@@ -604,7 +621,7 @@ export default function CitizenDashboard() {
                 </div>
               </div>
             ) : (
-              reports.filter(r => statusFilter === 'All' || r.status === statusFilter).length === 0 ? (
+              reports.filter(matchesStatusFilter).length === 0 ? (
               <div className="p-12 text-center bg-slate-900/10 border border-dashed border-slate-800/40 rounded-2xl text-slate-500 space-y-2">
                 <Clock className="w-8 h-8 mx-auto text-slate-650 animate-pulse" />
                 <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">{t("No Reports Found")}</h4>
@@ -618,7 +635,7 @@ export default function CitizenDashboard() {
               </div>
             ) : (
               reports
-                .filter(r => statusFilter === 'All' || r.status === statusFilter)
+                .filter(matchesStatusFilter)
                 .map((report) => (
               <div 
                 key={report.id}
@@ -686,47 +703,127 @@ export default function CitizenDashboard() {
                       <span>{t("Municipal Service Resolution details")}</span>
                     </div>
                     
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 rounded-xl bg-slate-900/40 border border-slate-800/60">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 rounded-xl bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800/60">
                       {report.status === 'Resolved' ? (
                         <>
                           <div className="space-y-1">
                             <span className="block text-[9px] text-slate-500 font-bold uppercase tracking-wider">{t("Resolved On")}</span>
-                            <span className="font-extrabold text-slate-200 block text-xs">{formatDate(report.resolvedDate)}</span>
+                            <span className="font-extrabold text-slate-800 dark:text-slate-200 block text-xs">{formatDate(report.resolvedDate)}</span>
                           </div>
                           <div className="space-y-1">
                             <span className="block text-[9px] text-slate-500 font-bold uppercase tracking-wider">{t("Resolved By")}</span>
-                            <span className="font-extrabold text-slate-200 block text-xs">{t(report.resolvedBy)}</span>
+                            <span className="font-extrabold text-slate-800 dark:text-slate-200 block text-xs">{t(report.resolvedBy)}</span>
                           </div>
                           <div className="space-y-1">
                             <span className="block text-[9px] text-slate-500 font-bold uppercase tracking-wider">{t("Time Taken")}</span>
-                            <span className="font-extrabold text-slate-200 block text-xs">{t(report.resolutionTime)}</span>
+                            <span className="font-extrabold text-slate-800 dark:text-slate-200 block text-xs">{report.resourcePlan ? `${report.resourcePlan.estimatedResolutionTime} Hours` : t(report.resolutionTime)}</span>
                           </div>
                           <div className="space-y-1">
                             <span className="block text-[9px] text-slate-500 font-bold uppercase tracking-wider">{t("Total Cost")}</span>
-                            <span className="font-extrabold text-emerald-450 block text-xs">{t(report.resolutionCost)}</span>
+                            <span className="font-extrabold text-emerald-600 dark:text-emerald-450 block text-xs">{report.resourcePlan ? `₹${report.resourcePlan.estimatedCost?.toLocaleString()}` : t(report.resolutionCost)}</span>
                           </div>
                         </>
                       ) : (
                         <>
                           <div className="space-y-1">
                             <span className="block text-[9px] text-slate-500 font-bold uppercase tracking-wider">{t("Current Status")}</span>
-                            <span className="font-extrabold text-blue-400 block text-xs uppercase tracking-wide">{t(report.status)}</span>
+                            <span className="font-extrabold text-blue-600 dark:text-blue-400 block text-xs uppercase tracking-wide">{t(report.status)}</span>
                           </div>
                           <div className="space-y-1">
-                            <span className="block text-[9px] text-slate-500 font-bold uppercase tracking-wider">{t("Assigned Officer")}</span>
-                            <span className="font-extrabold text-slate-200 block text-xs">{t(report.assignedOfficer || "Awaiting Assignment")}</span>
+                            <span className="block text-[9px] text-slate-500 font-bold uppercase tracking-wider">{t("Assigned Department")}</span>
+                            <span className="font-extrabold text-slate-800 dark:text-slate-200 block text-xs">{t(report.resourcePlan?.department || report.assignedDepartment || "Awaiting Assignment")}</span>
                           </div>
                           <div className="space-y-1">
                             <span className="block text-[9px] text-slate-500 font-bold uppercase tracking-wider">{t("Est. Resolution")}</span>
-                            <span className="font-extrabold text-slate-200 block text-xs">{t(report.estimatedTime || "Pending Review")}</span>
+                            <span className="font-extrabold text-slate-800 dark:text-slate-200 block text-xs">{report.resourcePlan ? `${report.resourcePlan.estimatedResolutionTime} Hours` : t(report.estimatedTime || "Pending Review")}</span>
                           </div>
                           <div className="space-y-1">
                             <span className="block text-[9px] text-slate-500 font-bold uppercase tracking-wider">{t("Est. Cost")}</span>
-                            <span className="font-extrabold text-slate-200 block text-xs">{t(report.estimatedCost || "Pending Assessment")}</span>
+                            <span className="font-extrabold text-slate-800 dark:text-slate-200 block text-xs">{report.resourcePlan ? `₹${report.resourcePlan.estimatedCost?.toLocaleString()}` : t(report.estimatedCost || "Pending Assessment")}</span>
                           </div>
                         </>
                       )}
                     </div>
+
+                    {/* ======= AI Resource Plan Details Card ======= */}
+                    {report.resourcePlan && !report.resourcePlan.rejected && (
+                      <div className="space-y-3 mt-4 pt-4 border-t border-slate-200 dark:border-slate-800/40">
+                        <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 font-extrabold uppercase tracking-widest text-[9px]">
+                          <Cpu className="w-3.5 h-3.5 animate-pulse" />
+                          <span>{t("AI Resource Plan — Approved by Officer")}</span>
+                          {report.resourcePlan.confidenceScore && (
+                            <span className="ml-auto px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-[9px] font-bold border border-emerald-200 dark:border-emerald-500/20">
+                              {t("AI Confidence")} {report.resourcePlan.confidenceScore}%
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          {/* Department */}
+                          <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800/60 space-y-1">
+                            <span className="block text-[8px] text-slate-500 font-bold uppercase tracking-wider">{t("Recommended Department")}</span>
+                            <span className="font-extrabold text-slate-800 dark:text-slate-200 block text-xs">{t(report.resourcePlan.department)}</span>
+                          </div>
+                          {/* Team */}
+                          <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800/60 space-y-1">
+                            <span className="block text-[8px] text-slate-500 font-bold uppercase tracking-wider">{t("Assigned Working Team")}</span>
+                            <span className="font-extrabold text-slate-800 dark:text-slate-200 block text-xs">{t(report.resourcePlan.teamName)}</span>
+                          </div>
+                          {/* Personnel */}
+                          <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800/60 space-y-1">
+                            <span className="block text-[8px] text-slate-500 font-bold uppercase tracking-wider">{t("Number of Personnel")}</span>
+                            <span className="font-extrabold text-slate-800 dark:text-slate-200 block text-xs flex items-center gap-1">
+                              <Users className="w-3 h-3 text-blue-500" />
+                              {report.resourcePlan.personnelCount} {t("Workers")}
+                            </span>
+                          </div>
+                          {/* Resolution Time */}
+                          <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800/60 space-y-1">
+                            <span className="block text-[8px] text-slate-500 font-bold uppercase tracking-wider">{t("Estimated Resolution Time")}</span>
+                            <span className="font-extrabold text-slate-800 dark:text-slate-200 block text-xs">{report.resourcePlan.estimatedResolutionTime} {t("Hours")}</span>
+                          </div>
+                          {/* Equipment */}
+                          <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800/60 space-y-1">
+                            <span className="block text-[8px] text-slate-500 font-bold uppercase tracking-wider">{t("Equipment & Vehicles Needed")}</span>
+                            <span className="font-extrabold text-slate-800 dark:text-slate-200 block text-xs flex items-center gap-1">
+                              <Wrench className="w-3 h-3 text-amber-500" />
+                              {t(report.resourcePlan.equipment)}
+                            </span>
+                          </div>
+                          {/* Budget */}
+                          <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800/60 space-y-1">
+                            <span className="block text-[8px] text-slate-500 font-bold uppercase tracking-wider">{t("Estimated Budget / Cost")}</span>
+                            <span className="font-extrabold text-emerald-600 dark:text-emerald-400 block text-xs">₹{report.resourcePlan.estimatedCost?.toLocaleString()}</span>
+                          </div>
+                          {/* Priority */}
+                          <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800/60 space-y-1">
+                            <span className="block text-[8px] text-slate-500 font-bold uppercase tracking-wider">{t("Priority Level")}</span>
+                            <span className={`font-extrabold block text-xs ${
+                              report.resourcePlan.priority === 'Critical' ? 'text-red-500' :
+                              report.resourcePlan.priority === 'High' ? 'text-amber-500' :
+                              report.resourcePlan.priority === 'Medium' ? 'text-blue-500' :
+                              'text-slate-800 dark:text-slate-300'
+                            }`}>{t(report.resourcePlan.priority)}</span>
+                          </div>
+                          {/* Completion Time */}
+                          <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800/60 space-y-1">
+                            <span className="block text-[8px] text-slate-500 font-bold uppercase tracking-wider">{t("Expected Completion Time")}</span>
+                            <span className="font-extrabold text-slate-800 dark:text-slate-200 block text-xs">{report.resourcePlan.expectedCompletionTime}</span>
+                          </div>
+                        </div>
+
+                        {/* AI Reasoning */}
+                        {report.resourcePlan.reasoning && (
+                          <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-500/5 border border-blue-200 dark:border-blue-900/30">
+                            <div className="flex items-center gap-1.5 mb-1.5">
+                              <Sparkles className="w-3 h-3 text-blue-500 animate-pulse" />
+                              <span className="text-[8px] text-blue-700 dark:text-blue-400 font-extrabold uppercase tracking-wider">{t("AI Strategic Reasoning Analysis")}</span>
+                            </div>
+                            <p className="text-[11px] text-slate-700 dark:text-slate-400 leading-relaxed">{t(report.resourcePlan.reasoning)}</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     {/* Visual Progress Timeline */}
                     <div className="space-y-3 mt-4 pt-4 border-t border-slate-800/40">
@@ -742,7 +839,7 @@ export default function CitizenDashboard() {
                           style={{
                             width: report.status === 'Resolved' 
                               ? 'calc(100% - 2rem)' 
-                              : report.status === 'Assigned' || report.status === 'In Progress'
+                              : report.status === 'Assigned' || report.status === 'In Progress' || report.status === 'Resources Assigned'
                                 ? 'calc(66% - 1.3rem)' 
                                 : report.status === 'Pending'
                                   ? 'calc(33% - 0.7rem)' 
@@ -761,14 +858,14 @@ export default function CitizenDashboard() {
                         {/* Step 2: Reviewed by Corresponding Officer */}
                         <div className="flex flex-col items-center z-10 space-y-1.5 w-24">
                           <div className={`w-6 h-6 rounded-full flex items-center justify-center border text-[10px] font-black transition-all duration-300 ${
-                            report.status === 'Pending' || report.status === 'Assigned' || report.status === 'In Progress' || report.status === 'Resolved'
+                            report.status === 'Pending' || report.status === 'Assigned' || report.status === 'In Progress' || report.status === 'Resources Assigned' || report.status === 'Resolved'
                               ? 'bg-brand-500 border-brand-400 text-white shadow-sm' 
                               : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-500'
                           }`}>
                             2
                           </div>
                           <span className={`text-[8px] font-bold text-center leading-none ${
-                            report.status === 'Pending' || report.status === 'Assigned' || report.status === 'In Progress' || report.status === 'Resolved'
+                            report.status === 'Pending' || report.status === 'Assigned' || report.status === 'In Progress' || report.status === 'Resources Assigned' || report.status === 'Resolved'
                               ? 'text-slate-750 dark:text-brand-300' 
                               : 'text-slate-400 dark:text-slate-600'
                           }`}>{t("Reviewed by Officer")}</span>
@@ -777,14 +874,14 @@ export default function CitizenDashboard() {
                         {/* Step 3: Under Maintenance / In Progress */}
                         <div className="flex flex-col items-center z-10 space-y-1.5 w-24">
                           <div className={`w-6 h-6 rounded-full flex items-center justify-center border text-[10px] font-black transition-all duration-300 ${
-                            report.status === 'Assigned' || report.status === 'In Progress' || report.status === 'Resolved'
+                            report.status === 'Assigned' || report.status === 'In Progress' || report.status === 'Resources Assigned' || report.status === 'Resolved'
                               ? 'bg-brand-500 border-brand-400 text-white shadow-sm' 
                               : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-500'
                           }`}>
                             3
                           </div>
                           <span className={`text-[8px] font-bold text-center leading-none ${
-                            report.status === 'Assigned' || report.status === 'In Progress' || report.status === 'Resolved'
+                            report.status === 'Assigned' || report.status === 'In Progress' || report.status === 'Resources Assigned' || report.status === 'Resolved'
                               ? 'text-slate-750 dark:text-brand-300' 
                               : 'text-slate-400 dark:text-slate-600'
                           }`}>{t("Under Maintenance")}</span>
@@ -835,9 +932,9 @@ export default function CitizenDashboard() {
                               <span className="block text-[10px] font-bold text-slate-700 dark:text-brand-300 uppercase">{t("Step 2: Official Review Completed")}</span>
                               <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400 space-y-1">
                                 <p>• <strong>{t("Reviewed By")}:</strong> {t(report.resolvedBy || report.assignedOfficer || "Officer Sandeep Kumar")}</p>
-                                <p>• <strong>{t("Department")}:</strong> {t(report.category === 'Roads & Safety' ? 'Public Works' : report.category === 'Sanitation' ? 'Health & Environment' : 'Municipal Infrastructure')}</p>
+                                <p>• <strong>{t("Department")}:</strong> {t(report.resourcePlan?.department || report.assignedDepartment || (report.category === 'Roads & Safety' ? 'Public Works' : report.category === 'Sanitation' ? 'Health & Environment' : 'Municipal Infrastructure'))}</p>
                                 <p>• <strong>{t("Officer Action Note")}:</strong> {t(report.officerNote || "Confirmed report details. Dispatched field assessment crew to verify hazard limits.")}</p>
-                                <p>• <strong>{t("AI Priority Rating")}:</strong> Score {report.priorityScore || 35} ({t("Auto-calculated based on public safety impact")})</p>
+                                <p>• <strong>{t("AI Priority Rating")}:</strong> Score {report.resourcePlan?.confidenceScore || report.priorityScore || 35} ({t("Auto-calculated based on public safety impact")})</p>
                               </div>
                             </div>
                           </div>
@@ -850,9 +947,9 @@ export default function CitizenDashboard() {
                             <div>
                               <span className="block text-[10px] font-bold text-slate-700 dark:text-brand-300 uppercase">{t("Step 3: Maintenance Works Dispatched")}</span>
                               <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400 space-y-1">
-                                <p>• <strong>{t("Dispatch Time")}:</strong> {formatDate(report.resolvedDate || report.date)} 02:00 PM</p>
-                                <p>• <strong>{t("Assigned Contractor")}:</strong> {t("District Civil Maintenance Works")}</p>
-                                <p>• <strong>{t("Operations Note")}:</strong> {t("Work crew is on-site. Temporary safety barriers have been erected.")}</p>
+                                <p>• <strong>{t("Dispatch Time")}:</strong> {report.resourcePlan?.approvedAt || formatDate(report.resolvedDate || report.date)} </p>
+                                <p>• <strong>{t("Assigned Team")}:</strong> {t(report.resourcePlan?.teamName || report.assignedTeam || "District Civil Maintenance Works")}</p>
+                                <p>• <strong>{t("Personnel")}:</strong> {report.resourcePlan?.personnelCount || 3} {t("Workers")}, {t(report.resourcePlan?.equipment || "Standard Equipment")}</p>
                               </div>
                             </div>
                           </div>
@@ -865,9 +962,9 @@ export default function CitizenDashboard() {
                             <div>
                               <span className="block text-[10px] font-bold text-emerald-500 uppercase">{t("Step 4: Issue Resolved")}</span>
                               <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400 space-y-1">
-                                <p>• <strong>{t("Completion Time")}:</strong> {formatDate(report.resolvedDate)} 05:45 PM</p>
-                                <p>• <strong>{t("Resolution Cost")}:</strong> {t(report.resolutionCost)}</p>
-                                <p>• <strong>{t("Labor & Resources Used")}:</strong> {t(report.laborUsed || "3 Crew Workers, 1 Utility Dispatch Vehicle")}</p>
+                                <p>• <strong>{t("Completion Time")}:</strong> {formatDate(report.resolvedDate)} {report.resourcePlan?.expectedCompletionTime || ''}</p>
+                                <p>• <strong>{t("Resolution Cost")}:</strong> {report.resourcePlan ? `₹${report.resourcePlan.estimatedCost?.toLocaleString()}` : t(report.resolutionCost)}</p>
+                                <p>• <strong>{t("Labor & Resources Used")}:</strong> {report.resourcePlan ? `${report.resourcePlan.personnelCount} Workers, ${report.resourcePlan.equipment}` : t(report.laborUsed || "3 Crew Workers, 1 Utility Dispatch Vehicle")}</p>
                                 <p>• <strong>{t("Final Audit Status")}:</strong> {t("Public utility operations verified safe. Case closed.")}</p>
                               </div>
                             </div>

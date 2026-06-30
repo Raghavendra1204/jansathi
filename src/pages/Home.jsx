@@ -312,7 +312,7 @@ export default function Home() {
       category: 'Sanitation',
       officer: 'Director Ramesh Prasad',
       avgTime: '12 Hours',
-      contact: 'sanitation-ops@jaansathi.gov.in',
+      contact: 'sanitation-ops@JanSathi.gov.in',
       status: 'Optimal Operation'
     },
     {
@@ -321,7 +321,7 @@ export default function Home() {
       category: 'Roads & Safety',
       officer: 'Chief Engineer Sandeep Kumar',
       avgTime: '24 Hours',
-      contact: 'roads-help@jaansathi.gov.in',
+      contact: 'roads-help@JanSathi.gov.in',
       status: 'Moderate Workload'
     },
     {
@@ -330,7 +330,7 @@ export default function Home() {
       category: 'Infrastructure',
       officer: 'Director Anita Sen',
       avgTime: '36 Hours',
-      contact: 'infra-ops@jaansathi.gov.in',
+      contact: 'infra-ops@JanSathi.gov.in',
       status: 'High Workload'
     },
     {
@@ -339,7 +339,7 @@ export default function Home() {
       category: 'Public Space',
       officer: 'Officer Vinay Rao',
       avgTime: '18 Hours',
-      contact: 'parks-maint@jaansathi.gov.in',
+      contact: 'parks-maint@JanSathi.gov.in',
       status: 'Optimal Operation'
     }
   ];

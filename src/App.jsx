@@ -20,6 +20,7 @@ export default function App() {
   const { user } = useAuth();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [theme, setTheme] = useState('dark');
+  const [splashActive, setSplashActive] = useState(true);
 
   const syncTheme = () => {
     try {
@@ -54,14 +55,41 @@ export default function App() {
     window.addEventListener('mock-auth-state-change', syncTheme);
     window.addEventListener('open-notifications-panel', () => setNotificationsOpen(true));
     
+    const timer = setTimeout(() => {
+      setSplashActive(false);
+    }, 2800);
+    
     return () => {
       window.removeEventListener('mock-auth-state-change', syncTheme);
       window.removeEventListener('open-notifications-panel', () => setNotificationsOpen(true));
+      clearTimeout(timer);
     };
   }, []);
 
   return (
     <TranslationProvider>
+      {splashActive && (
+        <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#070b13] animate-fade-in text-center p-6 select-none">
+          <div className="flex flex-col items-center space-y-6">
+            <img 
+              src="/logo.png" 
+              alt="Jan Sathi" 
+              className="w-32 h-32 md:w-40 md:h-40 object-contain animate-scale-up drop-shadow-[0_0_25px_rgba(59,130,246,0.3)]" 
+            />
+            <div className="space-y-2">
+              <h1 className="text-3xl md:text-4xl font-black text-white tracking-wider animate-slide-up">
+                JAN <span className="text-blue-500 font-medium">SATHI</span>
+              </h1>
+              <p className="text-slate-400 text-xs md:text-sm tracking-widest uppercase font-bold animate-pulse">
+                जन सेवा, हमारा संकल्प
+              </p>
+            </div>
+            <div className="w-48 bg-slate-900 h-1 rounded-full overflow-hidden mt-6">
+              <div className="bg-gradient-to-r from-blue-600 to-indigo-600 h-full rounded-full animate-loading-progress" style={{ width: '100%' }} />
+            </div>
+          </div>
+        </div>
+      )}
       <Router>
       <div className={`min-h-screen flex flex-col md:flex-row transition-colors duration-300 ${
         theme === 'light' ? 'bg-slate-50 text-slate-900' : 'bg-[#0b0f19] text-slate-100'
@@ -106,7 +134,7 @@ export default function App() {
           }`}>
             <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row justify-between items-center gap-4">
               <div>
-                &copy; {new Date().getFullYear()} Jaan Sathi Platform. All rights reserved.
+                &copy; {new Date().getFullYear()} Jan Sathi Platform. All rights reserved.
               </div>
               <div className="flex gap-4">
                 <a href="#" className="hover:text-slate-400 transition-colors">Privacy Policy</a>

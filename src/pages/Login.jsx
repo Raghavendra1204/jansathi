@@ -264,7 +264,7 @@ export default function Login() {
           <Landmark className="w-7 h-7" />
         </div>
         <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white font-display">
-          Jaan Sathi Civic Portal
+          Jan Sathi Civic Portal
         </h1>
         <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
           Secure identity portal for municipal citizens and civic administrators.
@@ -390,7 +390,7 @@ export default function Login() {
                       <input
                         type="email"
                         required
-                        placeholder={activeRole === 'citizen' ? "alex.carter@jaansathi.org" : "officer.name@jaansathi.org"}
+                        placeholder={activeRole === 'citizen' ? "alex.carter@JanSathi.org" : "officer.name@JanSathi.org"}
                         value={signInEmail}
                         onChange={(e) => setSignInEmail(e.target.value)}
                         className="w-full px-4 py-2.5 bg-slate-50 border border-slate-350 rounded-xl text-slate-900 text-sm focus:outline-none focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 transition-colors"
@@ -499,7 +499,7 @@ export default function Login() {
                 <input
                   type="email"
                   required
-                  placeholder="alex.carter@jaansathi.org"
+                  placeholder="alex.carter@JanSathi.org"
                   value={regEmail}
                   onChange={(e) => setRegEmail(e.target.value)}
                   className="w-full px-4 py-2.5 bg-slate-50 border border-slate-350 rounded-xl text-slate-900 text-sm focus:outline-none focus:border-blue-600 focus:bg-white focus:ring-1 focus:ring-blue-600 transition-colors"

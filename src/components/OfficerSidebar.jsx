@@ -28,10 +28,8 @@ export default function OfficerSidebar() {
     aiOperations: true,
     reportManagement: true,
     departments: false,
-    fieldOps: false,
     community: false,
     analytics: false,
-    communication: false,
     account: true
   });
 
@@ -159,11 +157,11 @@ export default function OfficerSidebar() {
         
         {/* Branding Logo */}
         <Link to="/" className="flex items-center gap-2.5 group shrink-0 px-1" onClick={closeMobileMenu}>
-          <div className="p-2 bg-blue-600/10 rounded-xl group-hover:bg-blue-600/20 border border-blue-500/20 group-hover:border-blue-500/40 transition-all duration-300">
-            <Shield className="w-5 h-5 text-blue-400 group-hover:text-blue-300 group-hover:scale-105 transition-transform" />
+          <div className="p-1.5 bg-blue-600/10 rounded-xl group-hover:bg-blue-600/20 border border-blue-500/20 group-hover:border-blue-500/40 transition-all duration-300 shrink-0">
+            <img src="/logo.png" alt="JanSathi Logo" className="w-6 h-6 object-contain rounded-lg" />
           </div>
           <span className="font-extrabold text-base lg:text-lg tracking-tight text-white group-hover:text-slate-200 transition-colors">
-            Jaan<span className="text-blue-400 font-medium">Sathi</span>
+            Jan<span className="text-blue-400 font-medium">Sathi</span>
             <span className="ml-1.5 text-[8px] bg-blue-600/20 text-blue-400 border border-blue-500/30 px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider">Gov</span>
           </span>
         </Link>
@@ -263,24 +261,7 @@ export default function OfficerSidebar() {
             )}
           </div>
 
-          {/* SECTION 5: FIELD OPERATIONS */}
-          <div className="space-y-1">
-            <button 
-              onClick={() => toggleSection('fieldOps')}
-              className="w-full flex items-center justify-between px-2.5 py-1 text-[9px] font-black text-slate-500 hover:text-slate-300 uppercase tracking-widest cursor-pointer"
-            >
-              <span>{t("Field Operations")}</span>
-              {expandedSections.fieldOps ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-            </button>
-            {expandedSections.fieldOps && (
-              <div className="space-y-0.5 pl-1.5 animate-fade-in">
-                {renderLink('/officer-dashboard?tab=command-center&sub=staff', 'Field Staff', Users)}
-                {renderLink('/officer-dashboard?tab=command-center&sub=assign', 'Assignments', FileText)}
-                {renderLink('/officer-dashboard?tab=command-center&sub=status', 'Live Team Status', Radio)}
-                {renderLink('/officer-dashboard?tab=command-center&sub=tracking', 'Response Tracking', MapPin)}
-              </div>
-            )}
-          </div>
+
 
           {/* SECTION 6: COMMUNITY */}
           <div className="space-y-1">
@@ -313,34 +294,18 @@ export default function OfficerSidebar() {
             </button>
             {expandedSections.analytics && (
               <div className="space-y-0.5 pl-1.5 animate-fade-in">
-                {renderLink('/officer-dashboard?tab=analytics', 'Performance Dash', BarChart3)}
+                {renderLink('/officer-dashboard?tab=analytics&view=performance', 'Performance Dash', BarChart3)}
                 {renderLink('/officer-dashboard?tab=analytics&view=depts', 'Dept Analytics', BarChart3)}
                 {renderLink('/officer-dashboard?tab=analytics&view=citizens', 'Citizen Participation', Users)}
                 {renderLink('/officer-dashboard?tab=analytics&view=wards', 'Ward Statistics', BarChart3)}
-                {renderLink('/officer-dashboard?tab=command-center', 'Heatmaps', MapPin)}
-                {renderLink('/officer-dashboard?tab=agents', 'AI Insights', Cpu)}
+                {renderLink('/officer-dashboard?tab=analytics&view=heatmap', 'Heatmaps', MapPin)}
+                {renderLink('/officer-dashboard?tab=analytics&view=insights', 'AI Insights', Cpu)}
+                {renderLink('/officer-dashboard?tab=executive-reports', 'Executive PDF Gen', FileText)}
               </div>
             )}
           </div>
 
-          {/* SECTION 8: COMMUNICATION */}
-          <div className="space-y-1">
-            <button 
-              onClick={() => toggleSection('communication')}
-              className="w-full flex items-center justify-between px-2.5 py-1 text-[9px] font-black text-slate-500 hover:text-slate-300 uppercase tracking-widest cursor-pointer"
-            >
-              <span>{t("Communication")}</span>
-              {expandedSections.communication ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-            </button>
-            {expandedSections.communication && (
-              <div className="space-y-0.5 pl-1.5 animate-fade-in">
-                {renderLink('/profile?tab=messages', 'Messages', MessageSquare)}
-                {renderLink('/profile?tab=notifications', 'Notifications', Bell, unreadNotifications)}
-                {renderLink('/profile?tab=messages&sub=announcements', 'Announcements', Megaphone)}
-                {renderLink('/profile?tab=messages&sub=broadcast', 'Broadcast Center', Radio)}
-              </div>
-            )}
-          </div>
+
 
           {/* SECTION 9: ACCOUNT */}
           <div className="space-y-1">
@@ -374,7 +339,7 @@ export default function OfficerSidebar() {
             <div className="p-3 rounded-xl bg-slate-900/50 border border-slate-800/85 space-y-2.5 text-left">
               <div className="flex items-center gap-2.5 text-left">
                 <img
-                  src={user.avatar || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=150'}
+                  src={user.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150'}
                   alt={user.name}
                   className="w-8 h-8 rounded-full object-cover ring-2 ring-blue-500/20 shrink-0"
                 />
@@ -460,7 +425,7 @@ export default function OfficerSidebar() {
             <Shield className="w-4 h-4 text-blue-400" />
           </div>
           <span className="font-extrabold text-sm tracking-tight text-white">
-            Jaan<span className="text-blue-400 font-medium">Sathi</span>
+            Jan<span className="text-blue-400 font-medium">Sathi</span>
           </span>
         </Link>
 

@@ -318,7 +318,7 @@ export function TranslationProvider({ children }) {
   // Load cached dynamic translations from localStorage to prevent repetitive API calls
   useEffect(() => {
     try {
-      const cached = localStorage.getItem('jaan_sathi_translations_cache');
+      const cached = localStorage.getItem('jan_sathi_translations_cache');
       if (cached) {
         setDynamicTranslations(JSON.parse(cached));
       }
@@ -348,7 +348,7 @@ export function TranslationProvider({ children }) {
       if (translated && translated !== text) {
         const updated = { ...dynamicTranslations, [cacheKey]: translated };
         setDynamicTranslations(updated);
-        localStorage.setItem('jaan_sathi_translations_cache', JSON.stringify(updated));
+        localStorage.setItem('jan_sathi_translations_cache', JSON.stringify(updated));
       }
     }).catch(err => {
       console.error("Translation background update failed:", err);

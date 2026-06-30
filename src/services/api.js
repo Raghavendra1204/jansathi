@@ -13,7 +13,7 @@ import {
 } from 'firebase/firestore';
 import { db, isMockFirebase } from '../firebase/config';
 
-// API services for Jaan Sathi database
+// API services for Jan Sathi database
 
 const MOCK_MISSIONS = [
   {
@@ -92,9 +92,9 @@ const DEFAULT_REPORTS = [];
 // Initialize local storage database
 const getStoredReports = () => {
   try {
-    const data = localStorage.getItem('jaan_sathi_reports');
+    const data = localStorage.getItem('jan_sathi_reports');
     if (!data) {
-      localStorage.setItem('jaan_sathi_reports', JSON.stringify(DEFAULT_REPORTS));
+      localStorage.setItem('jan_sathi_reports', JSON.stringify(DEFAULT_REPORTS));
       return DEFAULT_REPORTS;
     }
     
@@ -120,7 +120,7 @@ const getStoredReports = () => {
     });
 
     if (updated) {
-      localStorage.setItem('jaan_sathi_reports', JSON.stringify(reports));
+      localStorage.setItem('jan_sathi_reports', JSON.stringify(reports));
     }
     return reports;
   } catch {
@@ -129,15 +129,15 @@ const getStoredReports = () => {
 };
 
 const saveStoredReports = (reports) => {
-  localStorage.setItem('jaan_sathi_reports', JSON.stringify(reports));
+  localStorage.setItem('jan_sathi_reports', JSON.stringify(reports));
 };
 
 // Initialize local storage database for missions
 const getStoredMissions = () => {
   try {
-    const data = localStorage.getItem('jaan_sathi_missions');
+    const data = localStorage.getItem('jan_sathi_missions');
     if (!data) {
-      localStorage.setItem('jaan_sathi_missions', JSON.stringify(MOCK_MISSIONS));
+      localStorage.setItem('jan_sathi_missions', JSON.stringify(MOCK_MISSIONS));
       return MOCK_MISSIONS;
     }
     return JSON.parse(data);
@@ -147,12 +147,12 @@ const getStoredMissions = () => {
 };
 
 const saveStoredMissions = (missions) => {
-  localStorage.setItem('jaan_sathi_missions', JSON.stringify(missions));
+  localStorage.setItem('jan_sathi_missions', JSON.stringify(missions));
 };
 
 const getJoinedMissions = () => {
   try {
-    const data = localStorage.getItem('jaan_sathi_joined_missions');
+    const data = localStorage.getItem('jan_sathi_joined_missions');
     return data ? JSON.parse(data) : [];
   } catch {
     return [];
@@ -160,7 +160,7 @@ const getJoinedMissions = () => {
 };
 
 const saveJoinedMissions = (joined) => {
-  localStorage.setItem('jaan_sathi_joined_missions', JSON.stringify(joined));
+  localStorage.setItem('jan_sathi_joined_missions', JSON.stringify(joined));
 };
 
 export async function fetchMissions() {
@@ -449,7 +449,7 @@ export async function updateReport(reportId, updatedData) {
 
   if (isMockFirebase) {
     await new Promise(resolve => setTimeout(resolve, 300));
-    const localReports = JSON.parse(localStorage.getItem('jaan_sathi_reports') || '[]');
+    const localReports = JSON.parse(localStorage.getItem('jan_sathi_reports') || '[]');
     const idx = localReports.findIndex(r => r.id === reportId);
     let result = {};
     if (idx !== -1) {
@@ -458,7 +458,7 @@ export async function updateReport(reportId, updatedData) {
         ...updatedData,
         ...editTag
       };
-      localStorage.setItem('jaan_sathi_reports', JSON.stringify(localReports));
+      localStorage.setItem('jan_sathi_reports', JSON.stringify(localReports));
       result = localReports[idx];
     }
     
@@ -576,13 +576,14 @@ export async function voteReport(reportId, userId, voteType) {
   }
 }
 
-export async function addComment(reportId, commentText, authorName, authorAvatar = null) {
+export async function addComment(reportId, commentText, authorName, authorAvatar = null, authorId = null) {
   const newComment = {
     id: `c-${Date.now()}`,
     authorName,
     authorAvatar: authorAvatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150',
     text: commentText,
-    date: new Date().toISOString().split('T')[0]
+    date: new Date().toISOString().split('T')[0],
+    authorId: authorId || 'citizen_user'
   };
 
   if (isMockFirebase) {
@@ -663,6 +664,36 @@ export async function updateComment(reportId, commentId, newText) {
   }
 }
 
+export async function deleteComment(reportId, commentId) {
+  if (isMockFirebase) {
+    const reports = getStoredReports();
+    const reportIndex = reports.findIndex(r => r.id === reportId);
+    if (reportIndex === -1) throw new Error("Report not found");
+    const report = reports[reportIndex];
+    if (report.comments) {
+      report.comments = report.comments.filter(c => c.id !== commentId);
+      reports[reportIndex] = report;
+      saveStoredReports(reports);
+    }
+    return { success: true };
+  }
+
+  try {
+    const { db } = await import('../firebase/config');
+    const { doc, getDoc, updateDoc } = await import('firebase/firestore');
+    const docRef = doc(db, 'reports', reportId);
+    const docSnap = await getDoc(docRef);
+    if (!docSnap.exists()) throw new Error("Report not found");
+    const report = docSnap.data();
+    const comments = (report.comments || []).filter(c => c.id !== commentId);
+    await updateDoc(docRef, { comments });
+    return { success: true };
+  } catch (error) {
+    console.error("Error deleting comment:", error);
+    throw error;
+  }
+}
+
 // --- NOTIFICATIONS DATABASE MOCK SERVICES ---
 const DEFAULT_NOTIFICATIONS = [
   {
@@ -701,9 +732,9 @@ const DEFAULT_NOTIFICATIONS = [
 
 const getStoredNotifications = () => {
   try {
-    const data = localStorage.getItem('jaan_sathi_notifications');
+    const data = localStorage.getItem('jan_sathi_notifications');
     if (!data) {
-      localStorage.setItem('jaan_sathi_notifications', JSON.stringify(DEFAULT_NOTIFICATIONS));
+      localStorage.setItem('jan_sathi_notifications', JSON.stringify(DEFAULT_NOTIFICATIONS));
       return DEFAULT_NOTIFICATIONS;
     }
     return JSON.parse(data);
@@ -713,45 +744,151 @@ const getStoredNotifications = () => {
 };
 
 const saveStoredNotifications = (notifications) => {
-  localStorage.setItem('jaan_sathi_notifications', JSON.stringify(notifications));
+  localStorage.setItem('jan_sathi_notifications', JSON.stringify(notifications));
 };
 
 export async function fetchNotifications() {
-  await new Promise(resolve => setTimeout(resolve, 150));
-  return getStoredNotifications();
+  if (isMockFirebase) {
+    await new Promise(resolve => setTimeout(resolve, 150));
+    return getStoredNotifications();
+  }
+
+  try {
+    const currentSession = JSON.parse(localStorage.getItem('mock_current_user') || '{}');
+    const uid = currentSession.uid || 'citizen_user';
+    const { collection, getDocs, query, where } = await import('firebase/firestore');
+    const q = query(collection(db, 'notifications'), where('userId', '==', uid));
+    const querySnapshot = await getDocs(q);
+    const notifications = [];
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      notifications.push({
+        id: doc.id,
+        category: data.category || 'System Updates',
+        title: data.title,
+        message: data.message,
+        time: data.timestamp ? formatDate(data.timestamp.split('T')[0]) : 'Just now',
+        read: data.read || false,
+        timestampVal: data.timestamp ? new Date(data.timestamp).getTime() : 0
+      });
+    });
+    // Sort descending by timestamp
+    notifications.sort((a, b) => b.timestampVal - a.timestampVal);
+    return notifications;
+  } catch (error) {
+    console.error("Error fetching notifications from Firestore:", error);
+    return getStoredNotifications();
+  }
 }
 
 export async function toggleNotificationRead(id) {
-  const notifications = getStoredNotifications();
-  const index = notifications.findIndex(n => n.id === id);
-  if (index !== -1) {
-    notifications[index].read = !notifications[index].read;
-    saveStoredNotifications(notifications);
-    return notifications[index];
+  if (isMockFirebase) {
+    const notifications = getStoredNotifications();
+    const index = notifications.findIndex(n => n.id === id);
+    if (index !== -1) {
+      notifications[index].read = !notifications[index].read;
+      saveStoredNotifications(notifications);
+      return notifications[index];
+    }
+    throw new Error("Notification not found");
   }
-  throw new Error("Notification not found");
+
+  try {
+    const { doc, getDoc, updateDoc } = await import('firebase/firestore');
+    const docRef = doc(db, 'notifications', id);
+    const docSnap = await getDoc(docRef);
+    if (!docSnap.exists()) throw new Error("Notification not found");
+    const isRead = docSnap.data().read || false;
+    await updateDoc(docRef, { read: !isRead });
+    return { id, read: !isRead };
+  } catch (error) {
+    console.error("Error toggling notification read status in Firestore:", error);
+    throw error;
+  }
 }
 
 export async function markAllNotificationsAsRead() {
-  const notifications = getStoredNotifications();
-  notifications.forEach(n => { n.read = true; });
-  saveStoredNotifications(notifications);
-  return notifications;
+  if (isMockFirebase) {
+    const notifications = getStoredNotifications();
+    notifications.forEach(n => { n.read = true; });
+    saveStoredNotifications(notifications);
+    return notifications;
+  }
+
+  try {
+    const currentSession = JSON.parse(localStorage.getItem('mock_current_user') || '{}');
+    const uid = currentSession.uid || 'citizen_user';
+    const { collection, getDocs, query, where, doc, updateDoc } = await import('firebase/firestore');
+    const q = query(collection(db, 'notifications'), where('userId', '==', uid), where('read', '==', false));
+    const querySnapshot = await getDocs(q);
+    
+    const promises = [];
+    querySnapshot.forEach((document) => {
+      promises.push(updateDoc(doc(db, 'notifications', document.id), { read: true }));
+    });
+    await Promise.all(promises);
+    return fetchNotifications();
+  } catch (error) {
+    console.error("Error marking all notifications as read in Firestore:", error);
+    return getStoredNotifications();
+  }
 }
 
-export async function addNotification(category, title, message) {
-  const notifications = getStoredNotifications();
-  const newNotif = {
-    id: `n-${Date.now()}`,
-    category,
-    title,
-    message,
-    time: 'Just now',
-    read: false
-  };
-  notifications.unshift(newNotif);
-  saveStoredNotifications(notifications);
-  return newNotif;
+export async function addNotification(category, title, message, targetUserId = null) {
+  const currentSession = JSON.parse(localStorage.getItem('mock_current_user') || '{}');
+  const uid = targetUserId || currentSession.uid || 'citizen_user';
+  const timestamp = new Date().toISOString();
+
+  if (isMockFirebase) {
+    const notifications = getStoredNotifications();
+    const newNotif = {
+      id: `n-${Date.now()}`,
+      category,
+      title,
+      message,
+      time: 'Just now',
+      read: false,
+      userId: uid
+    };
+    notifications.unshift(newNotif);
+    saveStoredNotifications(notifications);
+    return newNotif;
+  }
+
+  try {
+    const { collection, addDoc } = await import('firebase/firestore');
+    const docRef = await addDoc(collection(db, 'notifications'), {
+      userId: uid,
+      category,
+      title,
+      message,
+      timestamp,
+      read: false
+    });
+    return {
+      id: docRef.id,
+      category,
+      title,
+      message,
+      time: 'Just now',
+      read: false
+    };
+  } catch (error) {
+    console.error("Error adding notification in Firestore:", error);
+    const notifications = getStoredNotifications();
+    const newNotif = {
+      id: `n-${Date.now()}`,
+      category,
+      title,
+      message,
+      time: 'Just now',
+      read: false,
+      userId: uid
+    };
+    notifications.unshift(newNotif);
+    saveStoredNotifications(notifications);
+    return newNotif;
+  }
 }
 
 // --- DOCUMENTS DATABASE MOCK SERVICES ---
@@ -776,9 +913,9 @@ const DEFAULT_DOCUMENTS = [
 
 const getStoredDocuments = () => {
   try {
-    const data = localStorage.getItem('jaan_sathi_documents');
+    const data = localStorage.getItem('jan_sathi_documents');
     if (!data) {
-      localStorage.setItem('jaan_sathi_documents', JSON.stringify(DEFAULT_DOCUMENTS));
+      localStorage.setItem('jan_sathi_documents', JSON.stringify(DEFAULT_DOCUMENTS));
       return DEFAULT_DOCUMENTS;
     }
     return JSON.parse(data);
@@ -788,7 +925,7 @@ const getStoredDocuments = () => {
 };
 
 const saveStoredDocuments = (docs) => {
-  localStorage.setItem('jaan_sathi_documents', JSON.stringify(docs));
+  localStorage.setItem('jan_sathi_documents', JSON.stringify(docs));
 };
 
 export async function fetchDocuments(userId = null) {
@@ -1026,16 +1163,16 @@ export async function logUserActivity(uid, title, xpReward = 0, type = 'Activity
       user.nextLevelXp = user.level * 1000;
       
       // Add level up notification
-      const notifications = JSON.parse(localStorage.getItem('jaan_sathi_notifications') || '[]');
+      const notifications = JSON.parse(localStorage.getItem('jan_sathi_notifications') || '[]');
       notifications.unshift({
         id: `n-lvl-${Date.now()}`,
         category: 'System Announcements',
         title: 'Guild Level Up!',
-        message: `Congratulations! You have reached Level ${user.level} in the Jaan Sathi Citizen Guild. Keep contributing!`,
+        message: `Congratulations! You have reached Level ${user.level} in the Jan Sathi Citizen Guild. Keep contributing!`,
         time: 'Just now',
         read: false
       });
-      localStorage.setItem('jaan_sathi_notifications', JSON.stringify(notifications));
+      localStorage.setItem('jan_sathi_notifications', JSON.stringify(notifications));
     }
 
     if (title.includes('Reported Issue')) {
@@ -1181,14 +1318,14 @@ export async function reviewDocument(docId, status, remarks, officerName) {
       mockDbDocs[idx].reviewDate = new Date().toISOString().split('T')[0];
       localStorage.setItem('mock_db_documents', JSON.stringify(mockDbDocs));
       
-      const localDocs = JSON.parse(localStorage.getItem('jaan_sathi_documents') || '[]');
+      const localDocs = JSON.parse(localStorage.getItem('jan_sathi_documents') || '[]');
       const localIdx = localDocs.findIndex(d => d.id === docId);
       if (localIdx !== -1) {
         localDocs[localIdx].status = status;
         localDocs[localIdx].officerRemark = remarks;
         localDocs[localIdx].officerName = officerName;
         localDocs[localIdx].reviewDate = new Date().toISOString().split('T')[0];
-        localStorage.setItem('jaan_sathi_documents', JSON.stringify(localDocs));
+        localStorage.setItem('jan_sathi_documents', JSON.stringify(localDocs));
       }
 
       const userId = mockDbDocs[idx].userId;
@@ -1230,6 +1367,69 @@ export async function reviewDocument(docId, status, remarks, officerName) {
     return { success: true };
   } catch (error) {
     console.error("Error reviewing document in Firestore:", error);
+    throw error;
+  }
+}
+
+const MOCK_TEAMS = [
+  { id: 'team-01', name: 'Roads Team Alpha', department: 'Roads & Bridges Department', leader: 'Suresh Raina', membersCount: 6, status: 'Available', currentIncidentId: null, performanceScore: 92, contact: '+91 98765 01001', lastUpdated: new Date().toLocaleString(), eta: 'N/A' },
+  { id: 'team-02', name: 'Water Crew Bravo', department: 'Water Board', leader: 'Amit Mishra', membersCount: 4, status: 'Assigned', currentIncidentId: 'rep-dup-03', performanceScore: 88, contact: '+91 98765 01002', lastUpdated: new Date().toLocaleString(), eta: '25 Mins' },
+  { id: 'team-03', name: 'Electrical Line Unit 1', department: 'Electricity Board', leader: 'Hardik Pandya', membersCount: 5, status: 'Available', currentIncidentId: null, performanceScore: 95, contact: '+91 98765 01003', lastUpdated: new Date().toLocaleString(), eta: 'N/A' },
+  { id: 'team-04', name: 'Drainage Squad Delta', department: 'Water Board', leader: 'Jasprit Bumrah', membersCount: 8, status: 'Working', currentIncidentId: 'rep-dup-04', performanceScore: 90, contact: '+91 98765 01004', lastUpdated: new Date().toLocaleString(), eta: 'En Route' },
+  { id: 'team-05', name: 'Sanitation Crew 5', department: 'Sanitation Department', leader: 'KL Rahul', membersCount: 12, status: 'Available', currentIncidentId: null, performanceScore: 84, contact: '+91 98765 01005', lastUpdated: new Date().toLocaleString(), eta: 'N/A' },
+  { id: 'team-06', name: 'Emergency Rescue Unit', department: 'Police Department', leader: 'Virat Kohli', membersCount: 10, status: 'En Route', currentIncidentId: null, performanceScore: 98, contact: '+91 98765 01006', lastUpdated: new Date().toLocaleString(), eta: '12 Mins' }
+];
+
+export async function fetchTeams() {
+  if (isMockFirebase) {
+    const data = localStorage.getItem('jan_sathi_teams');
+    if (!data) {
+      localStorage.setItem('jan_sathi_teams', JSON.stringify(MOCK_TEAMS));
+      return MOCK_TEAMS;
+    }
+    return JSON.parse(data);
+  }
+  try {
+    const querySnapshot = await getDocs(collection(db, 'teams'));
+    const teams = [];
+    querySnapshot.forEach((doc) => {
+      teams.push({ id: doc.id, ...doc.data() });
+    });
+    if (teams.length === 0) {
+      for (const t of MOCK_TEAMS) {
+        await setDoc(doc(db, 'teams', t.id), t);
+        teams.push(t);
+      }
+    }
+    return teams;
+  } catch (error) {
+    console.error("Error fetching teams from Firestore:", error);
+    const data = localStorage.getItem('jan_sathi_teams');
+    return data ? JSON.parse(data) : MOCK_TEAMS;
+  }
+}
+
+export async function updateTeam(teamId, updateData) {
+  const timestamp = new Date().toLocaleString();
+  const fullUpdate = { ...updateData, lastUpdated: timestamp };
+  
+  if (isMockFirebase) {
+    const data = localStorage.getItem('jan_sathi_teams');
+    const teams = data ? JSON.parse(data) : [...MOCK_TEAMS];
+    const idx = teams.findIndex(t => t.id === teamId);
+    if (idx !== -1) {
+      teams[idx] = { ...teams[idx], ...fullUpdate };
+      localStorage.setItem('jan_sathi_teams', JSON.stringify(teams));
+      window.dispatchEvent(new CustomEvent('refresh-teams'));
+    }
+    return { success: true };
+  }
+  try {
+    const docRef = doc(db, 'teams', teamId);
+    await setDoc(docRef, fullUpdate, { merge: true });
+    return { success: true };
+  } catch (error) {
+    console.error("Error updating team in Firestore:", error);
     throw error;
   }
 }

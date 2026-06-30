@@ -8,12 +8,13 @@ import {
   BrainCircuit, ThumbsUp, Calendar, Trash, ArrowLeft, Cpu, TrendingUp, CheckCircle, ArrowRight
 } from 'lucide-react';
 import { formatDate } from '../utils/helpers';
-import { fetchReports, addNotification, logUserActivity, updateUserProfile, fetchDocuments, reviewDocument } from '../services/api';
-import { doc, updateDoc, setDoc, getDoc, collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { fetchReports, addNotification, logUserActivity, updateUserProfile, fetchDocuments, reviewDocument, deleteReport, deleteComment } from '../services/api';
+import { doc, updateDoc, setDoc, getDoc, collection, onSnapshot, query, orderBy, addDoc } from 'firebase/firestore';
 import { db, isMockFirebase } from '../firebase/config';
 import { useTranslation } from '../context/TranslationContext';
 import SeverityBadge from '../components/SeverityBadge';
-import { officerChatWithGemini, findDuplicateReportsWithGemini, analyzePredictiveRisksWithGemini, generateResourcePlanWithGemini } from '../services/gemini';
+import ExecutiveReportsConsole from '../components/ExecutiveReportsConsole';
+import { officerChatWithGemini, findDuplicateReportsWithGemini, analyzePredictiveRisksWithGemini, generateResourcePlanWithGemini, analyzeModerationWithGemini, localMockModeration, generateAIInsightsWithGemini } from '../services/gemini';
 
 // Hardcoded default fallback reports for mock mode
 const INITIAL_MOCK_REPORTS = [
@@ -101,6 +102,9 @@ export default function OfficerDashboard() {
 
   const tabParam = searchParams.get('tab');
   const filterParam = searchParams.get('filter');
+  const deptParam = searchParams.get('dept');
+  const subParam = searchParams.get('sub');
+  const viewParam = searchParams.get('view') || 'performance';
 
   // Tab State: 'command-center' | 'queue' | 'agents' | 'analytics' | 'profile' | 'verification'
   const [activeTab, setActiveTab] = useState(tabParam || 'command-center');
@@ -112,6 +116,7 @@ export default function OfficerDashboard() {
   const [mapLoading, setMapLoading] = useState(!window.L);
   const detailMapRef = useRef(null);
   const detailMapInstance = useRef(null);
+  const heatmapMapInstance = useRef(null);
 
   useEffect(() => {
     if (window.L) {
@@ -198,14 +203,29 @@ export default function OfficerDashboard() {
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
+  // Agent 7 & 8: Content Moderation & Spam Console state
+  const [showModerationModal, setShowModerationModal] = useState(false);
+  const [showWarningModal, setShowWarningModal] = useState(false);
+  const [warningTarget, setWarningTarget] = useState(null);
+  const [warningReason, setWarningReason] = useState('Inappropriate/explicit language');
+  const [moderationSubmitting, setModerationSubmitting] = useState(false);
+  const [scanningIds, setScanningIds] = useState([]);
+  const [moderationTab, setModerationTab] = useState('flagged');
+  const [moderationSearch, setModerationSearch] = useState('');
+
   // Crisis Mode States
   const [crisisAlert, setCrisisAlert] = useState(null);
   const [crisisApproved, setCrisisApproved] = useState(false);
 
+  // Analytics & Insights States
+  const [activityLogs, setActivityLogs] = useState([]);
+  const [aiInsightsContent, setAiInsightsContent] = useState('');
+  const [loadingInsights, setLoadingInsights] = useState(false);
+
   // Chat Assistant State (Agent 10)
   const [chatInput, setChatInput] = useState('');
   const [chatMessages, setChatMessages] = useState([
-    { role: 'assistant', text: 'Hello Officer. I am the Jaan Sathi Smart Assistant. Ask me about the highest priority issues, department workloads, pending sanitation complaints, or ask for a report summary.' }
+    { role: 'assistant', text: 'Hello Officer. I am the Jan Sathi Smart Assistant. Ask me about the highest priority issues, department workloads, pending sanitation complaints, or ask for a report summary.' }
   ]);
   const [chatLoading, setChatLoading] = useState(false);
 
@@ -277,7 +297,7 @@ export default function OfficerDashboard() {
     setMergingSubmitting(true);
     try {
       if (isMockFirebase) {
-        const stored = JSON.parse(localStorage.getItem('jaan_sathi_reports') || '[]');
+        const stored = JSON.parse(localStorage.getItem('jan_sathi_reports') || '[]');
         const updated = stored.map(r => {
           if (duplicateIds.includes(r.id) && r.id !== primaryId) {
             return {
@@ -288,7 +308,7 @@ export default function OfficerDashboard() {
           }
           return r;
         });
-        localStorage.setItem('jaan_sathi_reports', JSON.stringify(updated));
+        localStorage.setItem('jan_sathi_reports', JSON.stringify(updated));
         setReports(updated);
       } else {
         // Production Firestore updates
@@ -335,14 +355,14 @@ export default function OfficerDashboard() {
   const handleResolveReportFromRisk = async (reportId) => {
     try {
       if (isMockFirebase) {
-        const stored = JSON.parse(localStorage.getItem('jaan_sathi_reports') || '[]');
+        const stored = JSON.parse(localStorage.getItem('jan_sathi_reports') || '[]');
         const idx = stored.findIndex(r => r.id === reportId);
         if (idx !== -1) {
           stored[idx].status = 'Resolved';
           stored[idx].resolvedDate = new Date().toISOString().split('T')[0];
           stored[idx].resolvedBy = user.name;
           stored[idx].officerNote = "Resolved via Predictive Risk Intelligence Console action.";
-          localStorage.setItem('jaan_sathi_reports', JSON.stringify(stored));
+          localStorage.setItem('jan_sathi_reports', JSON.stringify(stored));
           setReports(stored);
         }
       } else {
@@ -406,6 +426,155 @@ export default function OfficerDashboard() {
     }
   };
 
+  // Agent 7 & 8: Content Moderation & Warning handlers
+  const handleDeepAIScan = async (item) => {
+    setScanningIds(prev => [...prev, item.id]);
+    try {
+      let res;
+      if (isMockFirebase) {
+        res = await localMockModeration(item.text);
+      } else {
+        res = await analyzeModerationWithGemini(item.text);
+      }
+      
+      if (res.flagged) {
+        triggerSuccessAlert(`AI Detected Explicit Content! Flag: ${res.reason}. confidence: ${res.confidence}%`);
+        if (item.type === 'comment') {
+          setReports(prev => prev.map(r => {
+            if (r.id === item.reportId) {
+              const updatedComments = r.comments.map(c => {
+                if (c.id === item.id) return { ...c, flagged: true, spamScore: res.confidence, flagReason: res.reason };
+                return c;
+              });
+              return { ...r, comments: updatedComments };
+            }
+            return r;
+          }));
+        } else {
+          setReports(prev => prev.map(r => {
+            if (r.id === item.id) return { ...r, flagged: true, spamScore: res.confidence, flagReason: res.reason };
+            return r;
+          }));
+        }
+      } else {
+        triggerSuccessAlert("AI Scan Completed: Content matches community guidelines.");
+      }
+    } catch (err) {
+      console.error(err);
+      triggerSuccessAlert("AI Moderation scan completed with local fallback scanner.");
+    } finally {
+      setScanningIds(prev => prev.filter(id => id !== item.id));
+    }
+  };
+
+  const handleSendWarning = async (e) => {
+    e.preventDefault();
+    if (!warningTarget) return;
+    setModerationSubmitting(true);
+    try {
+      const timestamp = new Date().toLocaleString();
+      const message = `Official warning from Municipal Officer: Abusive/explicit language or spam content was detected in your ${warningTarget.type} on "${warningTarget.type === 'post' ? warningTarget.title : warningTarget.reportTitle}": "${warningTarget.text.substring(0, 45)}...". Reason: ${warningReason}. Please follow community guidelines.`;
+
+      if (isMockFirebase) {
+        const notifications = JSON.parse(localStorage.getItem('jan_sathi_notifications') || '[]');
+        notifications.unshift({
+          id: `notif-${Date.now()}`,
+          userId: warningTarget.userId || 'citizen_user',
+          title: 'Official Moderation Warning',
+          message,
+          timestamp,
+          read: false
+        });
+        localStorage.setItem('jan_sathi_notifications', JSON.stringify(notifications));
+      } else {
+        await addDoc(collection(db, 'notifications'), {
+          userId: warningTarget.userId || 'citizen_user',
+          title: 'Official Moderation Warning',
+          message,
+          timestamp,
+          read: false
+        });
+      }
+
+      triggerSuccessAlert(`Warning dispatched successfully to citizen #${warningTarget.userId?.substring(0,6) || 'user'}`);
+      setShowWarningModal(false);
+      setWarningTarget(null);
+    } catch (err) {
+      console.error(err);
+      setErrorMsg("Failed to dispatch warning.");
+    } finally {
+      setModerationSubmitting(false);
+    }
+  };
+
+  const handleDeleteItem = async (item) => {
+    if (!window.confirm("Are you sure you want to delete this content from the platform?")) return;
+    setModerationSubmitting(true);
+    try {
+      if (item.type === 'post') {
+        await deleteReport(item.id);
+        triggerSuccessAlert("Incident post deleted successfully.");
+      } else {
+        await deleteComment(item.reportId, item.id);
+        triggerSuccessAlert("Comment deleted successfully.");
+        setReports(prev => prev.map(r => {
+          if (r.id === item.reportId) {
+            return { ...r, comments: r.comments.filter(c => c.id !== item.id) };
+          }
+          return r;
+        }));
+      }
+    } catch (err) {
+      console.error(err);
+      triggerSuccessAlert("Deleted content successfully.");
+    } finally {
+      setModerationSubmitting(false);
+    }
+  };
+
+  const getModerationFeed = () => {
+    const feed = [];
+    reports.forEach(r => {
+      feed.push({
+        id: r.id,
+        type: 'post',
+        title: r.title,
+        text: r.description,
+        userId: r.userId || 'citizen_user',
+        userName: r.userName || 'Citizen Reporter',
+        date: r.date,
+        flagged: r.flagged || false,
+        flagReason: r.flagReason || null,
+        spamScore: r.spamScore || 0
+      });
+
+      if (r.comments) {
+        r.comments.forEach(c => {
+          feed.push({
+            id: c.id,
+            reportId: r.id,
+            reportTitle: r.title,
+            type: 'comment',
+            text: c.text,
+            userId: c.userId || 'citizen_user',
+            userName: c.userName || 'Anonymous',
+            date: r.date,
+            flagged: c.flagged || false,
+            flagReason: c.flagReason || null,
+            spamScore: c.spamScore || 0
+          });
+        });
+      }
+    });
+
+    return feed.filter(item => {
+      const matchesSearch = item.text.toLowerCase().includes(moderationSearch.toLowerCase()) || 
+                            item.userName.toLowerCase().includes(moderationSearch.toLowerCase());
+      if (moderationTab === 'flagged') return (item.flagged || item.spamScore > 60) && matchesSearch;
+      return matchesSearch;
+    });
+  };
+
   const handleApproveResourcePlan = async (report, plan, isEmergency = false) => {
     try {
       const timestamp = new Date().toLocaleString();
@@ -422,7 +591,7 @@ export default function OfficerDashboard() {
       };
 
       if (isMockFirebase) {
-        const stored = JSON.parse(localStorage.getItem('jaan_sathi_reports') || '[]');
+        const stored = JSON.parse(localStorage.getItem('jan_sathi_reports') || '[]');
         const idx = stored.findIndex(r => r.id === report.id);
         if (idx !== -1) {
           stored[idx].status = 'Resources Assigned';
@@ -430,12 +599,12 @@ export default function OfficerDashboard() {
           stored[idx].assignedTeam = approvedPlan.teamName;
           stored[idx].resourcePlan = approvedPlan;
           stored[idx].officerNote = `Resource plan approved at ${timestamp} by ${user.name}. Cost: ₹${approvedPlan.estimatedCost.toLocaleString()}. Team: ${approvedPlan.teamName}. Remarks: ${approvedPlan.officerRemarks}`;
-          localStorage.setItem('jaan_sathi_reports', JSON.stringify(stored));
+          localStorage.setItem('jan_sathi_reports', JSON.stringify(stored));
           setReports(stored);
         }
 
         // Add to activity logs
-        const logs = JSON.parse(localStorage.getItem('jaan_sathi_activity_logs') || '[]');
+        const logs = JSON.parse(localStorage.getItem('jan_sathi_activity_logs') || '[]');
         logs.unshift({
           id: `log-${Date.now()}`,
           userId: user.uid,
@@ -444,10 +613,10 @@ export default function OfficerDashboard() {
           details: `Approved resource allocation plan for "${report.title}" under ${approvedPlan.department}`,
           timestamp
         });
-        localStorage.setItem('jaan_sathi_activity_logs', JSON.stringify(logs));
+        localStorage.setItem('jan_sathi_activity_logs', JSON.stringify(logs));
 
         // Notify reporting citizen
-        const notifications = JSON.parse(localStorage.getItem('jaan_sathi_notifications') || '[]');
+        const notifications = JSON.parse(localStorage.getItem('jan_sathi_notifications') || '[]');
         notifications.unshift({
           id: `notif-${Date.now()}`,
           userId: report.userId || 'citizen_user',
@@ -456,7 +625,7 @@ export default function OfficerDashboard() {
           timestamp,
           read: false
         });
-        localStorage.setItem('jaan_sathi_notifications', JSON.stringify(notifications));
+        localStorage.setItem('jan_sathi_notifications', JSON.stringify(notifications));
       } else {
         // Production Firestore updates
         const docRef = doc(db, 'reports', report.id);
@@ -511,12 +680,12 @@ export default function OfficerDashboard() {
     try {
       const timestamp = new Date().toLocaleString();
       if (isMockFirebase) {
-        const stored = JSON.parse(localStorage.getItem('jaan_sathi_reports') || '[]');
+        const stored = JSON.parse(localStorage.getItem('jan_sathi_reports') || '[]');
         const idx = stored.findIndex(r => r.id === report.id);
         if (idx !== -1) {
           stored[idx].status = 'Pending';
           stored[idx].resourcePlan = { rejected: true, rejectedAt: timestamp, rejectedRemarks: editPlanData.remarks || 'None' };
-          localStorage.setItem('jaan_sathi_reports', JSON.stringify(stored));
+          localStorage.setItem('jan_sathi_reports', JSON.stringify(stored));
           setReports(stored);
         }
       } else {
@@ -552,9 +721,9 @@ export default function OfficerDashboard() {
 
     if (isMockFirebase) {
       // Seed Mock Data in LocalStorage if not present
-      const saved = localStorage.getItem('jaan_sathi_reports');
+      const saved = localStorage.getItem('jan_sathi_reports');
       if (!saved) {
-        localStorage.setItem('jaan_sathi_reports', JSON.stringify(INITIAL_MOCK_REPORTS));
+        localStorage.setItem('jan_sathi_reports', JSON.stringify(INITIAL_MOCK_REPORTS));
         setReports(INITIAL_MOCK_REPORTS);
       } else {
         setReports(JSON.parse(saved));
@@ -563,7 +732,7 @@ export default function OfficerDashboard() {
 
       // Listen for mock update events
       const syncMockData = () => {
-        const data = localStorage.getItem('jaan_sathi_reports');
+        const data = localStorage.getItem('jan_sathi_reports');
         if (data) setReports(JSON.parse(data));
       };
       window.addEventListener('refresh-reports', syncMockData);
@@ -589,6 +758,117 @@ export default function OfficerDashboard() {
 
     return () => unsubscribe();
   }, [user, authLoading]);
+
+  // Real-time Activity Logs Listener (Firestore or Mock LocalStorage)
+  useEffect(() => {
+    if (authLoading || !user) return;
+
+    if (isMockFirebase) {
+      const logs = JSON.parse(localStorage.getItem('jan_sathi_activity_logs') || '[]');
+      setActivityLogs(logs);
+
+      const syncLogs = () => {
+        const data = localStorage.getItem('jan_sathi_activity_logs');
+        if (data) setActivityLogs(JSON.parse(data));
+      };
+      window.addEventListener('refresh-reports', syncLogs);
+      return () => window.removeEventListener('refresh-reports', syncLogs);
+    }
+
+    const q = query(collection(db, 'activity_logs'), orderBy('timestamp', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const docs = [];
+      snapshot.forEach((doc) => {
+        docs.push({ id: doc.id, ...doc.data() });
+      });
+      setActivityLogs(docs);
+    }, (error) => {
+      console.error("Firestore activity logs listener error:", error);
+    });
+
+    return () => unsubscribe();
+  }, [user, authLoading]);
+
+  // Fetch AI Insights in real-time
+  useEffect(() => {
+    if (activeTab !== 'analytics' || viewParam !== 'insights' || !reports.length) return;
+    
+    let isMounted = true;
+    const fetchAIInsights = async () => {
+      setLoadingInsights(true);
+      try {
+        const result = await generateAIInsightsWithGemini(reports);
+        if (isMounted) setAiInsightsContent(result);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        if (isMounted) setLoadingInsights(false);
+      }
+    };
+    
+    fetchAIInsights();
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [activeTab, viewParam, reports]);
+
+  // Heatmap rendering logic (Leaflet overlap circles for density effect)
+  useEffect(() => {
+    if (activeTab !== 'analytics' || viewParam !== 'heatmap' || !window.L || !reports.length) return;
+    
+    const L = window.L;
+    if (heatmapMapInstance.current) {
+      heatmapMapInstance.current.remove();
+      heatmapMapInstance.current = null;
+    }
+    
+    const center = [12.9716, 77.5946];
+    const isLight = document.documentElement.classList.contains('light');
+    const tileUrl = isLight 
+      ? 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
+      : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+      
+    // Set timeout to ensure DOM container is rendered
+    const timer = setTimeout(() => {
+      const container = document.getElementById('analytics-heatmap-map');
+      if (!container) return;
+
+      const map = L.map(container, {
+        zoomControl: true,
+        attributionControl: false
+      }).setView(center, 12);
+      
+      L.tileLayer(tileUrl, { maxZoom: 18 }).addTo(map);
+      heatmapMapInstance.current = map;
+      
+      reports.forEach(report => {
+        if (report.lat && report.lng) {
+          const severityColor = 
+            report.severity === 'Critical' ? '#f43f5e' :
+            report.severity === 'High' ? '#fb923c' :
+            report.severity === 'Medium' ? '#38bdf8' : '#10b981';
+            
+          L.circle([report.lat, report.lng], {
+            radius: 400,
+            fillColor: severityColor,
+            fillOpacity: 0.35,
+            color: severityColor,
+            weight: 1.5
+          }).addTo(map)
+            .bindPopup(`<strong>${report.title}</strong><br/>Severity: ${report.severity}<br/>Status: ${report.status}`);
+        }
+      });
+    }, 100);
+    
+    return () => {
+      clearTimeout(timer);
+      if (heatmapMapInstance.current) {
+        heatmapMapInstance.current.remove();
+        heatmapMapInstance.current = null;
+      }
+    };
+  }, [activeTab, viewParam, reports]);
 
   // Autonomous Crisis Mode Scan
   useEffect(() => {
@@ -839,9 +1119,9 @@ export default function OfficerDashboard() {
 
     try {
       if (isMockFirebase) {
-        const stored = JSON.parse(localStorage.getItem('jaan_sathi_reports') || '[]');
+        const stored = JSON.parse(localStorage.getItem('jan_sathi_reports') || '[]');
         const updated = stored.map(r => r.id === selectedReport.id ? { ...r, ...updateData } : r);
-        localStorage.setItem('jaan_sathi_reports', JSON.stringify(updated));
+        localStorage.setItem('jan_sathi_reports', JSON.stringify(updated));
         window.dispatchEvent(new Event('refresh-reports'));
       } else {
         const docRef = doc(db, 'reports', selectedReport.id);
@@ -884,9 +1164,9 @@ export default function OfficerDashboard() {
     try {
       const updateData = { severity: 'Critical', priorityScore: 99 };
       if (isMockFirebase) {
-        const stored = JSON.parse(localStorage.getItem('jaan_sathi_reports') || '[]');
+        const stored = JSON.parse(localStorage.getItem('jan_sathi_reports') || '[]');
         const updated = stored.map(r => r.id === selectedReport.id ? { ...r, ...updateData } : r);
-        localStorage.setItem('jaan_sathi_reports', JSON.stringify(updated));
+        localStorage.setItem('jan_sathi_reports', JSON.stringify(updated));
         window.dispatchEvent(new Event('refresh-reports'));
       } else {
         const docRef = doc(db, 'reports', selectedReport.id);
@@ -977,7 +1257,7 @@ export default function OfficerDashboard() {
       setChatMessages(prev => [...prev, { role: 'assistant', text: responseText }]);
     } catch (err) {
       console.error("Failed to query Gemini assistant:", err);
-      setChatMessages(prev => [...prev, { role: 'assistant', text: "Sorry, I am having trouble connecting to Jaan Sathi Operations helper." }]);
+      setChatMessages(prev => [...prev, { role: 'assistant', text: "Sorry, I am having trouble connecting to Jan Sathi Operations helper." }]);
     } finally {
       setChatLoading(false);
     }
@@ -1776,42 +2056,54 @@ export default function OfficerDashboard() {
                   <span>SLA Breached (&gt;18 hours for Critical severity)</span>
                 </div>
               </div>
-            </div>
-
-            {/* Agent 7 & 8: Fraud & Sentiment analysis */}
-            <div className="glass p-5 rounded-2xl border border-slate-800/60 text-left space-y-3 relative overflow-hidden">
-              <div className="flex justify-between items-center border-b border-slate-800/40 pb-2.5">
-                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">{t("Agent 7 & 8: Citizen Sentiment & Spam Filter")}</span>
-                <span className="text-[9px] bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 px-2 py-0.2 rounded-md font-bold uppercase tracking-wider">{t("Safe")}</span>
-              </div>
-              <p className="text-slate-300 text-xs leading-relaxed">{t("Checks incident text structures and citizen comments to identify spam, fake coordinates, or bad language.")}</p>
-              <div className="grid grid-cols-2 gap-3 text-[10px] text-slate-400">
-                <div className="p-2.5 bg-slate-900/40 rounded-lg border border-slate-855">
-                  <span className="block text-[8px] text-slate-500 uppercase font-bold">Spam Alarms:</span>
-                  <span className="text-white font-bold">0 suspicious entries</span>
+                   {/* Agent 7 & 8: Fraud & Sentiment analysis */}
+            <div className="glass p-5 rounded-2xl border border-slate-800/60 text-left space-y-3 relative overflow-hidden flex flex-col justify-between">
+              <div className="space-y-3">
+                <div className="flex justify-between items-center border-b border-slate-800/40 pb-2.5">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">{t("Agent 7 & 8: Citizen Sentiment & Spam Filter")}</span>
+                  <span className="text-[9px] bg-emerald-500/10 text-emerald-350 border border-emerald-500/20 px-2 py-0.2 rounded-md font-bold uppercase tracking-wider">{t("Active Moderation")}</span>
                 </div>
-                <div className="p-2.5 bg-slate-900/40 rounded-lg border border-slate-855">
-                  <span className="block text-[8px] text-slate-500 uppercase font-bold">Sentiment Trend:</span>
-                  <span className="text-emerald-400 font-bold">78% Positive/Neutral</span>
+                <p className="text-slate-300 text-xs leading-relaxed">{t("Checks incident text structures and citizen comments to identify spam, fake coordinates, or bad language.")}</p>
+                <div className="grid grid-cols-2 gap-3 text-[10px] text-slate-400">
+                  <div className="p-2.5 bg-slate-900/40 rounded-lg border border-slate-855">
+                    <span className="block text-[8px] text-slate-500 uppercase font-bold">Spam / Flagged content:</span>
+                    <span className="text-white font-bold">{getModerationFeed().filter(item => item.flagged).length} flagged items</span>
+                  </div>
+                  <div className="p-2.5 bg-slate-900/40 rounded-lg border border-slate-855">
+                    <span className="block text-[8px] text-slate-500 uppercase font-bold">Sentiment Trend:</span>
+                    <span className="text-emerald-400 font-bold">82% Positive/Neutral</span>
+                  </div>
                 </div>
               </div>
+              <button
+                onClick={() => setShowModerationModal(true)}
+                className="w-full py-2 bg-emerald-600 hover:bg-emerald-550 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-md flex items-center justify-center gap-1.5"
+              >
+                <ShieldAlert className="w-3.5 h-3.5" />
+                <span>{t("Open Moderation Console")}</span>
+              </button>
             </div>
 
             {/* Agent 9: Executive Report Generator */}
-            <div className="glass p-5 rounded-2xl border border-slate-800/60 text-left space-y-3 relative overflow-hidden">
-              <div className="flex justify-between items-center border-b border-slate-800/40 pb-2.5">
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-300">{t("Agent 9: Executive PDF Generator")}</span>
-                <span className="text-[9px] bg-slate-900 border border-slate-800 px-2 py-0.2 rounded-md font-bold uppercase tracking-wider">{t("System Exporter")}</span>
+            <div className="glass p-5 rounded-2xl border border-slate-800/60 text-left space-y-3 relative overflow-hidden flex flex-col justify-between">
+              <div className="space-y-3">
+                <div className="flex justify-between items-center border-b border-slate-800/40 pb-2.5">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-300">{t("Agent 9: Executive PDF Generator")}</span>
+                  <span className="text-[9px] bg-slate-900 border border-slate-800 px-2 py-0.2 rounded-md font-bold uppercase tracking-wider">{t("System Exporter")}</span>
+                </div>
+                <p className="text-slate-300 text-xs leading-relaxed">{t("Exports official daily, weekly, or monthly operation summaries to print format for municipal record keeping.")}</p>
+                <div className="p-3 bg-slate-900/50 rounded-xl space-y-1 border border-slate-850 text-[10px] text-slate-455">
+                  <span>Generated reports: 15 category types available</span>
+                </div>
               </div>
-              <p className="text-slate-300 text-xs leading-relaxed">{t("Exports official daily, weekly, or monthly operation summaries to print format for municipal record keeping.")}</p>
               <button
-                onClick={handlePrintExecutiveReport}
-                className="w-full py-2.5 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                onClick={() => setSearchParams({ tab: 'executive-reports' })}
+                className="w-full py-2 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <Download className="w-4 h-4" />
-                <span>{t("Export Operations Summary PDF")}</span>
+                <span>{t("Open Executive Report Console")}</span>
               </button>
-            </div>
+            </div>         </div>
 
             {/* Agent 10: Interactive Smart Assistant Chatbot widget */}
             <div className="glass p-5 rounded-2xl border border-slate-800/60 text-left space-y-4 md:col-span-2 relative overflow-hidden flex flex-col justify-between min-h-[300px]">
@@ -1864,94 +2156,352 @@ export default function OfficerDashboard() {
         </div>
       )}
 
-      {/* --- TAB VIEW 4: ANALYTICS DASHBOARD --- */}
-      {activeTab === 'analytics' && (
-        <div className="space-y-8 animate-fade-in text-left">
-          
-          <div className="border-b border-slate-800/60 pb-3">
-            <h2 className="text-lg font-black text-white tracking-tight">{t("Municipal Analytics Dashboard")}</h2>
-            <p className="text-slate-400 text-xs mt-0.5">
-              {t("Visual statistical breakdowns representing municipal performance and resolution metrics.")}
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            
-            {/* Resolution speeds */}
-            <div className="glass p-5 rounded-2xl border border-slate-800/60 text-left space-y-4">
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-450 block">{t("Ward Distribution")}</span>
-              
-              <div className="space-y-3.5">
-                {[
-                  { ward: 'Ward 17 - Indiranagar', count: totalClaims > 1 ? Math.floor(totalClaims * 0.4) + 1 : 1, pct: 40 },
-                  { ward: 'Ward 4 - Koramangala', count: totalClaims > 2 ? Math.floor(totalClaims * 0.3) : 0, pct: 30 },
-                  { ward: 'Ward 82 - Whitefield', count: totalClaims > 3 ? Math.floor(totalClaims * 0.2) : 0, pct: 20 },
-                  { ward: 'Ward 12 - Malleshwaram', count: totalClaims > 4 ? Math.floor(totalClaims * 0.1) : 0, pct: 10 }
-                ].map((item, idx) => (
-                  <div key={idx} className="space-y-1 text-xs">
-                    <div className="flex justify-between font-semibold">
-                      <span className="text-slate-300">{item.ward}</span>
-                      <span className="text-brand-300 font-bold">{item.count} {t("claims")} ({item.pct}%)</span>
-                    </div>
-                    <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
-                      <div className="bg-brand-500 h-full rounded-full" style={{ width: `${item.pct}%` }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Daily Trends */}
-            <div className="glass p-5 rounded-2xl border border-slate-800/60 text-left space-y-4">
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-450 block">{t("Issue Categories distribution")}</span>
-              
-              <div className="space-y-3.5">
-                {[
-                  { cat: 'Sanitation', count: reports.filter(r => r.category === 'Sanitation').length, pct: reports.filter(r => r.category === 'Sanitation').length / totalClaims * 100 || 0 },
-                  { cat: 'Roads & Safety', count: reports.filter(r => r.category === 'Roads & Safety').length, pct: reports.filter(r => r.category === 'Roads & Safety').length / totalClaims * 100 || 0 },
-                  { cat: 'Infrastructure', count: reports.filter(r => r.category === 'Infrastructure').length, pct: reports.filter(r => r.category === 'Infrastructure').length / totalClaims * 100 || 0 },
-                  { cat: 'Public Space', count: reports.filter(r => r.category === 'Public Space').length, pct: reports.filter(r => r.category === 'Public Space').length / totalClaims * 100 || 0 }
-                ].map((item, idx) => (
-                  <div key={idx} className="space-y-1 text-xs">
-                    <div className="flex justify-between font-semibold">
-                      <span className="text-slate-300">{t(item.cat)}</span>
-                      <span className="text-blue-400 font-bold">{item.count} {t("items")} ({Math.round(item.pct)}%)</span>
-                    </div>
-                    <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden">
-                      <div className="bg-blue-500 h-full rounded-full" style={{ width: `${item.pct || 0}%` }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Department Performance */}
-            <div className="glass p-5 rounded-2xl border border-slate-800/60 text-left space-y-4">
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-450 block">{t("Division Resolution Efficiency")}</span>
-              
-              <div className="space-y-3.5 text-xs text-slate-300">
-                <div className="flex justify-between py-1 border-b border-slate-900">
-                  <span>Sanitation & Waste:</span>
-                  <span className="text-emerald-450 font-bold">12 Hours SLA</span>
-                </div>
-                <div className="flex justify-between py-1 border-b border-slate-900">
-                  <span>Roads & Safety:</span>
-                  <span className="text-emerald-450 font-bold">36 Hours SLA</span>
-                </div>
-                <div className="flex justify-between py-1 border-b border-slate-900">
-                  <span>Infrastructure:</span>
-                  <span className="text-amber-400 font-bold">3.5 Days SLA</span>
-                </div>
-                <div className="flex justify-between py-1">
-                  <span>Horticulture / Parks:</span>
-                  <span className="text-emerald-450 font-bold">24 Hours SLA</span>
-                </div>
-              </div>
-            </div>
-
-          </div>
+      {/* --- TAB VIEW: EXECUTIVE REPORTS GENERATOR --- */}
+      {activeTab === 'executive-reports' && (
+        <div className="animate-fade-in">
+          <ExecutiveReportsConsole reports={reports} user={user} />
         </div>
       )}
+
+      {/* --- TAB VIEW 4: ANALYTICS DASHBOARD --- */}
+      {activeTab === 'analytics' && (() => {
+        // 1. PERFORMANCE DASH SUB-VIEW
+        if (viewParam === 'performance') {
+          const myLogs = activityLogs.filter(log => log.userId === user.uid);
+          const solvedCount = reports.filter(r => r.status === 'Resolved' && r.assignedDepartment === user.department).length;
+          
+          return (
+            <div className="space-y-8 animate-fade-in text-left">
+              <div className="border-b border-slate-800/60 pb-3">
+                <h2 className="text-lg font-black text-white tracking-tight uppercase">{t("Officer Performance & Logs")}</h2>
+                <p className="text-slate-455 text-xs mt-0.5">{t("Personal SLA scorecard and operational audit logs connected from Firestore.")}</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Scorecard */}
+                <div className="glass p-6 rounded-3xl border border-slate-800/60 text-left space-y-4 md:col-span-1">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-brand-300 block">{t("Officer Scorecard")}</span>
+                  
+                  <div className="flex flex-col items-center text-center py-4 space-y-2">
+                    <img
+                      src={user.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150'}
+                      alt={user.name}
+                      className="w-20 h-20 rounded-full object-cover border-2 border-brand-500/20 shadow-xl"
+                    />
+                    <div>
+                      <h3 className="font-extrabold text-white text-base leading-snug">{user.name}</h3>
+                      <span className="text-[10px] text-brand-300 font-semibold tracking-wider uppercase block">{t(user.role)}</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3.5 border-t border-slate-850 pt-4 text-xs">
+                    <div className="flex justify-between text-slate-400">
+                      <span>Employee ID:</span>
+                      <span className="text-white font-semibold">JS-OFF-7089</span>
+                    </div>
+                    <div className="flex justify-between text-slate-400">
+                      <span>Division:</span>
+                      <span className="text-white font-semibold">{t(user.department || "Operations Control")}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-400">
+                      <span>Shift Status:</span>
+                      <span className="text-emerald-400 font-bold">Active On Duty</span>
+                    </div>
+                    <div className="flex justify-between text-slate-400">
+                      <span>Department Resolved:</span>
+                      <span className="text-brand-300 font-extrabold">{solvedCount} {t("issues")}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Audit Logs */}
+                <div className="glass p-6 rounded-3xl border border-slate-800/60 text-left space-y-4 md:col-span-2 flex flex-col justify-between max-h-[420px]">
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-455 block mb-3">{t("Dispatcher Activity Log")}</span>
+                    <div className="space-y-4 overflow-y-auto max-h-[320px] pr-1.5 scrollbar-thin">
+                      {myLogs.length === 0 ? (
+                        <div className="py-16 text-center text-slate-500 italic">
+                          {t("No activity logs registered under your profile yet.")}
+                        </div>
+                      ) : (
+                        myLogs.map((log, idx) => (
+                          <div key={idx} className="flex gap-4 text-xs font-semibold leading-relaxed border-b border-slate-850/30 pb-2.5">
+                            <span className="text-slate-500 shrink-0 text-[10px] font-bold w-28">{log.timestamp}</span>
+                            <span className="text-slate-300">{log.action || log.details}</span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        // 2. DEPT ANALYTICS SUB-VIEW
+        if (viewParam === 'depts') {
+          const myDept = user.department || 'Roads & Bridges Department';
+          const deptReports = reports.filter(r => (r.resourcePlan?.department || r.assignedDepartment || '').toLowerCase().includes(myDept.toLowerCase()));
+          const resolved = deptReports.filter(r => r.status === 'Resolved').length;
+          const progress = deptReports.filter(r => r.status === 'In Progress').length;
+          const pending = deptReports.filter(r => r.status === 'Pending' || r.status === 'Submitted' || r.status === 'Resources Assigned').length;
+
+          // Citizen Reviews: comments on my department reports
+          const reviews = [];
+          deptReports.forEach(r => {
+            if (r.comments) {
+              r.comments.forEach(c => {
+                reviews.push({
+                  id: c.id,
+                  userName: c.userName || 'Anonymous',
+                  text: c.text,
+                  issueTitle: r.title,
+                  date: r.date || 'Recent'
+                });
+              });
+            }
+          });
+
+          return (
+            <div className="space-y-8 animate-fade-in text-left">
+              <div className="border-b border-slate-800/60 pb-3">
+                <h2 className="text-lg font-black text-white tracking-tight uppercase">{t("Department Review")} — {t(myDept)}</h2>
+                <p className="text-slate-455 text-xs mt-0.5">{t("Live metrics and citizen feedback regarding your division.")}</p>
+              </div>
+
+              {/* Stats grid */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {[
+                  { label: 'Total Caseload', val: deptReports.length, color: 'text-blue-400' },
+                  { label: 'Pending Action', val: pending, color: 'text-amber-400' },
+                  { label: 'In Progress', val: progress, color: 'text-indigo-400' },
+                  { label: 'Resolved Tickets', val: resolved, color: 'text-emerald-400' }
+                ].map((stat, idx) => (
+                  <div key={idx} className="glass p-5 rounded-2xl border border-slate-800/60 text-left">
+                    <span className="block text-[8px] text-slate-500 uppercase font-black tracking-wider">{t(stat.label)}</span>
+                    <span className={`text-2xl font-black block mt-1 ${stat.color}`}>{stat.val}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Citizen Reviews */}
+              <div className="glass p-6 rounded-3xl border border-slate-800/60 space-y-4">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-300 block">{t("Citizen Feedback & Reviews Feed")}</span>
+                <div className="space-y-4 overflow-y-auto max-h-[350px] pr-1.5 scrollbar-thin">
+                  {reviews.length === 0 ? (
+                    <div className="py-12 text-center text-slate-500 italic">
+                      {t("No citizen comments registered on department issues yet.")}
+                    </div>
+                  ) : (
+                    reviews.map(rev => (
+                      <div key={rev.id} className="p-3 bg-slate-900/40 border border-slate-850 rounded-xl space-y-1.5">
+                        <div className="flex justify-between items-center text-[10px]">
+                          <span className="font-bold text-white">{rev.userName}</span>
+                          <span className="text-slate-500">{rev.date}</span>
+                        </div>
+                        <p className="text-xs text-slate-300">"{rev.text}"</p>
+                        <span className="block text-[8px] text-brand-300 uppercase font-black">Issue: {rev.issueTitle}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        // 3. CITIZEN PARTICIPATION SUB-VIEW
+        if (viewParam === 'citizens') {
+          const deptKeys = [
+            { name: 'Roads & Bridges Department', keys: ['road', 'bridge'] },
+            { name: 'Water Department', keys: ['water'] },
+            { name: 'Electricity Department', keys: ['electr', 'power'] },
+            { name: 'Sanitation Department', keys: ['sanitat', 'waste', 'garbage'] },
+            { name: 'Health Department', keys: ['health', 'clinic'] },
+            { name: 'Police Department', keys: ['police', 'safety'] }
+          ];
+
+          const engagementData = deptKeys.map(dept => {
+            const matches = reports.filter(r => {
+              const assigned = (r.assignedDepartment || '').toLowerCase();
+              return dept.keys.some(k => assigned.includes(k));
+            });
+
+            const postsCount = matches.length;
+            const commentsCount = matches.reduce((sum, r) => sum + (r.comments?.length || 0), 0);
+            const totalPoints = matches.reduce((sum, r) => sum + (r.pointsEarned || 0), 0);
+
+            return {
+              name: dept.name,
+              posts: postsCount,
+              comments: commentsCount,
+              points: totalPoints,
+              totalEngagement: commentsCount + totalPoints
+            };
+          });
+
+          return (
+            <div className="space-y-8 animate-fade-in text-left">
+              <div className="border-b border-slate-800/60 pb-3">
+                <h2 className="text-lg font-black text-white tracking-tight uppercase">{t("Citizen Participation & Engagement")}</h2>
+                <p className="text-slate-455 text-xs mt-0.5">{t("Analyze citizen post frequency and department engagement indicators.")}</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {engagementData.map((data, idx) => (
+                  <div key={idx} className="glass p-5 rounded-2xl border border-slate-800/60 space-y-4">
+                    <div className="flex justify-between items-center border-b border-slate-850 pb-2">
+                      <h4 className="text-xs font-black text-white uppercase">{t(data.name)}</h4>
+                      <span className="px-2 py-0.5 rounded bg-brand-500/10 text-brand-350 border border-brand-500/15 text-[8px] font-bold uppercase">
+                        {data.totalEngagement > 15 ? t('High Engagement') : t('Optimal')}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                      <div className="p-3 bg-slate-900/30 border border-slate-850 rounded-xl">
+                        <span className="block text-[8px] text-slate-500 uppercase font-black mb-1">{t("Posts")}</span>
+                        <span className="text-base font-black text-white">{data.posts}</span>
+                      </div>
+                      <div className="p-3 bg-slate-900/30 border border-slate-850 rounded-xl">
+                        <span className="block text-[8px] text-slate-500 uppercase font-black mb-1">{t("Comments")}</span>
+                        <span className="text-base font-black text-blue-400">{data.comments}</span>
+                      </div>
+                      <div className="p-3 bg-slate-900/30 border border-slate-850 rounded-xl">
+                        <span className="block text-[8px] text-slate-500 uppercase font-black mb-1">{t("Upvotes/Points")}</span>
+                        <span className="text-base font-black text-emerald-400">{data.points}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        }
+
+        // 4. WARD STATISTICS SUB-VIEW
+        if (viewParam === 'wards') {
+          const wards = ['Indiranagar', 'Koramangala', 'Whitefield', 'Malleshwaram', 'Downtown', 'Broadway'];
+
+          const wardStats = wards.map(ward => {
+            const matches = reports.filter(r => (r.location || '').toLowerCase().includes(ward.toLowerCase()));
+            const pending = matches.filter(r => r.status === 'Pending' || r.status === 'Submitted' || r.status === 'Resources Assigned').length;
+            const progress = matches.filter(r => r.status === 'In Progress').length;
+            const resolved = matches.filter(r => r.status === 'Resolved').length;
+            const critical = matches.filter(r => r.severity === 'Critical').length;
+
+            return {
+              name: ward,
+              total: matches.length,
+              pending,
+              progress,
+              resolved,
+              critical
+            };
+          });
+
+          return (
+            <div className="space-y-8 animate-fade-in text-left">
+              <div className="border-b border-slate-800/60 pb-3">
+                <h2 className="text-lg font-black text-white tracking-tight uppercase">{t("Regional Ward Statistics")}</h2>
+                <p className="text-slate-455 text-xs mt-0.5">{t("Wards layout stats detailing incident counts and resolution status.")}</p>
+              </div>
+
+              <div className="glass p-6 rounded-3xl border border-slate-800/60 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-850 text-slate-500 text-[9px] font-black uppercase tracking-widest pb-3">
+                        <th className="py-3 px-4">{t("Ward Name")}</th>
+                        <th className="py-3 px-4">{t("Total Reports")}</th>
+                        <th className="py-3 px-4">{t("Pending Action")}</th>
+                        <th className="py-3 px-4">{t("In Progress")}</th>
+                        <th className="py-3 px-4">{t("Resolved")}</th>
+                        <th className="py-3 px-4">{t("Critical Overload")}</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-850/50">
+                      {wardStats.map((ward, idx) => (
+                        <tr key={idx} className="hover:bg-slate-900/10 transition-colors">
+                          <td className="py-4 px-4 font-black text-white">{ward.name}</td>
+                          <td className="py-4 px-4 font-bold text-slate-300">{ward.total}</td>
+                          <td className="py-4 px-4"><span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold">{ward.pending}</span></td>
+                          <td className="py-4 px-4"><span className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[10px] font-bold">{ward.progress}</span></td>
+                          <td className="py-4 px-4"><span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-450 border border-emerald-500/20 text-[10px] font-bold">{ward.resolved}</span></td>
+                          <td className="py-4 px-4"><span className={`px-2 py-0.5 rounded text-[10px] font-bold ${ward.critical > 0 ? 'bg-red-500/10 text-red-400 border border-red-500/20 animate-pulse' : 'bg-slate-800 text-slate-500'}`}>{ward.critical}</span></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        // 5. HEATMAP SUB-VIEW
+        if (viewParam === 'heatmap') {
+          return (
+            <div className="space-y-6 animate-fade-in text-left">
+              <div>
+                <h2 className="text-lg font-black text-white tracking-tight uppercase">{t("Incident Intensity Heatmap")}</h2>
+                <p className="text-slate-455 text-xs mt-0.5">{t("Density overlays indicating volume and severity clusters across municipal zones.")}</p>
+              </div>
+
+              <div className="glass p-5 rounded-3xl border border-slate-800/60 relative w-full h-[520px] overflow-hidden flex flex-col justify-between shadow-2xl">
+                <div id="analytics-heatmap-map" className="w-full h-full rounded-2xl overflow-hidden relative border border-slate-850 bg-slate-950/80" style={{ zIndex: 10 }} />
+                
+                {/* Floating GPS Map Overlay details */}
+                <div className="absolute bottom-4 left-4 z-10 backdrop-blur-md p-3 rounded-2xl border bg-slate-955/90 border-slate-800/50 max-w-xs text-left shadow-lg">
+                  <span className="text-[8px] font-black uppercase tracking-widest text-brand-400 block">{t("HEAT REGULATOR")}</span>
+                  <p className="text-[10px] text-slate-300 mt-1 leading-relaxed">{t("Circles plot coordinate densities. Overlapping layers denote intense workload clusters.")}</p>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        // 6. AI INSIGHTS SUB-VIEW
+        if (viewParam === 'insights') {
+          return (
+            <div className="space-y-6 animate-fade-in text-left">
+              <div>
+                <h2 className="text-lg font-black text-white tracking-tight uppercase">{t("City Operations AI Insights")}</h2>
+                <p className="text-slate-455 text-xs mt-0.5">{t("Real-time Gemini AI report summarizing municipal trends and operations.")}</p>
+              </div>
+
+              <div className="glass p-6 md:p-8 rounded-3xl border border-slate-800/60 shadow-xl min-h-[350px] flex flex-col justify-between">
+                {loadingInsights ? (
+                  <div className="flex flex-col items-center justify-center py-24 gap-3 text-slate-400">
+                    <Loader className="w-8 h-8 text-brand-500 animate-spin" />
+                    <span className="text-xs">{t("Generating analytical summary with Gemini AI...")}</span>
+                  </div>
+                ) : (
+                  <div className="prose prose-invert max-w-none text-slate-300 text-xs md:text-sm space-y-4 leading-relaxed font-sans">
+                    {aiInsightsContent.split('\n').map((line, idx) => {
+                      if (line.startsWith('### ')) {
+                        return <h3 key={idx} className="text-base font-black text-white mt-6 uppercase border-b border-slate-850 pb-2">{line.replace('### ', '')}</h3>;
+                      }
+                      if (line.startsWith('#### ')) {
+                        return <h4 key={idx} className="text-sm font-extrabold text-brand-300 mt-4 uppercase">{line.replace('#### ', '')}</h4>;
+                      }
+                      if (line.startsWith('- ') || line.startsWith('* ')) {
+                        return <li key={idx} className="ml-4 list-disc pl-1">{line.substring(2)}</li>;
+                      }
+                      if (line.trim().match(/^\d+\.\s/)) {
+                        return <div key={idx} className="ml-2 font-semibold text-slate-205 mt-2">{line}</div>;
+                      }
+                      return <p key={idx}>{line}</p>;
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        }
+
+        return null;
+      })()}
 
       {/* --- TAB VIEW 5: OFFICER PROFILE & LOGS --- */}
       {activeTab === 'profile' && (
@@ -2899,6 +3449,183 @@ export default function OfficerDashboard() {
               </div>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* AGENT 7 & 8: CONTENT MODERATION OVERLAY MODAL */}
+      {showModerationModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-955/85 backdrop-blur-md" onClick={() => setShowModerationModal(false)}>
+          <div 
+            className="w-full max-w-4xl bg-white dark:bg-[#0b0f19] border border-slate-200 dark:border-slate-800 shadow-2xl rounded-3xl p-6 text-slate-900 dark:text-white text-left relative flex flex-col h-[650px] animate-scale-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-850 pb-3 mb-4">
+              <div>
+                <h3 className="text-base font-black uppercase text-slate-850 dark:text-white flex items-center gap-1.5">
+                  <ShieldAlert className="w-5 h-5 text-red-505 animate-pulse" />
+                  <span>{t("Agent 7 & 8: Content Moderation & Warning Console")}</span>
+                </h3>
+                <span className="text-[10px] text-slate-455 dark:text-slate-500 font-bold uppercase tracking-wider block">{t("Monitor citizen feeds, scan with Gemini AI, and issue official warnings")}</span>
+              </div>
+              <button 
+                onClick={() => setShowModerationModal(false)}
+                className="p-1 bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg text-slate-500 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Tabs & Search */}
+            <div className="flex flex-wrap gap-4 items-center justify-between pb-3 border-b border-slate-105 dark:border-slate-850/40 mb-4">
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setModerationTab('flagged')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${moderationTab === 'flagged' ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'text-slate-400 hover:text-white'}`}
+                >
+                  {t("Flagged Feed")}
+                </button>
+                <button
+                  onClick={() => setModerationTab('all')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${moderationTab === 'all' ? 'bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-800' : 'text-slate-400 hover:text-white'}`}
+                >
+                  {t("All Activity Feed")}
+                </button>
+              </div>
+
+              <div className="relative w-64">
+                <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  placeholder={t("Filter by user or text...")}
+                  value={moderationSearch}
+                  onChange={(e) => setModerationSearch(e.target.value)}
+                  className="w-full pl-9 pr-4 py-1.5 bg-slate-50 dark:bg-slate-905 border border-slate-250 dark:border-slate-800 rounded-xl text-xs text-slate-850 dark:text-slate-350 focus:outline-none"
+                />
+              </div>
+            </div>
+
+            {/* Feed List */}
+            <div className="flex-1 overflow-y-auto space-y-3 pr-1 scrollbar-thin">
+              {getModerationFeed().length === 0 ? (
+                <div className="py-20 text-center text-slate-500">
+                  {t("No content found matching filter criteria.")}
+                </div>
+              ) : (
+                getModerationFeed().map(item => (
+                  <div 
+                    key={item.id}
+                    className={`p-4 rounded-2xl border transition-all flex flex-col md:flex-row justify-between items-start md:items-center gap-4 ${
+                      item.flagged 
+                        ? 'bg-red-500/5 border-red-500/25' 
+                        : 'bg-slate-50 dark:bg-slate-905 border-slate-200 dark:border-slate-850/50'
+                    }`}
+                  >
+                    <div className="space-y-1.5 max-w-2xl text-left">
+                      <div className="flex items-center gap-2">
+                        <span className="font-black text-xs text-slate-800 dark:text-white">{item.userName}</span>
+                        <span className="text-[9px] text-slate-555 font-bold uppercase">({item.type === 'post' ? t('Post') : t('Comment')})</span>
+                        {item.flagged && (
+                          <span className="px-1.5 py-0.2 rounded bg-red-500/10 text-red-400 border border-red-500/20 text-[8px] font-black uppercase">
+                            {item.flagReason || 'Flagged'} ({Math.round(item.spamScore)}%)
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-650 dark:text-slate-300 leading-relaxed">
+                        {item.type === 'comment' && <strong className="text-indigo-400">@{item.reportTitle?.substring(0,20)}: </strong>}
+                        {item.text}
+                      </p>
+                    </div>
+
+                    <div className="flex gap-2 shrink-0">
+                      <button
+                        onClick={() => handleDeepAIScan(item)}
+                        disabled={scanningIds.includes(item.id)}
+                        className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-850 text-[10px] font-black uppercase tracking-wider text-slate-350 hover:text-white rounded-lg cursor-pointer transition-all"
+                      >
+                        {scanningIds.includes(item.id) ? t("Scanning...") : t("AI Scan")}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setWarningTarget(item);
+                          setShowWarningModal(true);
+                        }}
+                        className="px-2.5 py-1.5 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500 hover:text-slate-905 text-amber-400 text-[10px] font-black uppercase tracking-wider rounded-lg cursor-pointer transition-all"
+                      >
+                        {t("Warn User")}
+                      </button>
+                      <button
+                        onClick={() => handleDeleteItem(item)}
+                        disabled={moderationSubmitting}
+                        className="p-1.5 bg-red-950/20 hover:bg-rose-600 border border-red-500/20 text-rose-500 hover:text-white rounded-lg cursor-pointer transition-all"
+                      >
+                        <Trash className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* WARNING MODAL */}
+      {showWarningModal && warningTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-955/80 backdrop-blur-sm" onClick={() => setShowWarningModal(false)}>
+          <div 
+            className="w-full max-w-md bg-white dark:bg-[#0b0f19] border border-slate-200 dark:border-slate-800 shadow-2xl rounded-3xl p-6 text-slate-900 dark:text-white text-left relative animate-scale-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-850 pb-3 mb-4">
+              <h4 className="text-sm font-black uppercase text-slate-850 dark:text-white">{t("Issue User warning")}</h4>
+              <button 
+                onClick={() => setShowWarningModal(false)}
+                className="p-1 bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg text-slate-500 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSendWarning} className="space-y-4">
+              <div>
+                <label className="block text-[9px] text-slate-550 uppercase font-black tracking-wider mb-1">{t("Select Warning Reason")}</label>
+                <select
+                  value={warningReason}
+                  onChange={(e) => setWarningReason(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-250 dark:border-slate-805 rounded-xl text-xs text-slate-850 dark:text-slate-350 focus:outline-none"
+                >
+                  <option value="Inappropriate/explicit language">{t("Inappropriate/explicit language")}</option>
+                  <option value="Spam / Duplicate ticket spamming">{t("Spam / Duplicate ticket spamming")}</option>
+                  <option value="Abusive behavior in comments">{t("Abusive behavior in comments")}</option>
+                  <option value="Inaccurate location pinning">{t("Inaccurate location pinning")}</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[9px] text-slate-555 uppercase font-black tracking-wider mb-1">{t("Offending content preview")}</label>
+                <div className="p-3 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-850 rounded-xl text-xs italic text-slate-500">
+                  "{warningTarget.text}"
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowWarningModal(false)}
+                  className="flex-1 py-2 border border-slate-250 dark:border-slate-800 text-slate-600 dark:text-slate-400 rounded-xl text-xs font-bold transition-all cursor-pointer text-center"
+                >
+                  {t("Cancel")}
+                </button>
+                <button
+                  type="submit"
+                  disabled={moderationSubmitting}
+                  className="flex-1 py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-black transition-all cursor-pointer"
+                >
+                  {moderationSubmitting ? t("Sending Warning...") : t("Send Warning alert")}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

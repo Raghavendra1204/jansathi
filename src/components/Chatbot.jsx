@@ -7,7 +7,7 @@ const INITIAL_MESSAGES = [
   {
     id: 'm-init',
     role: 'model',
-    text: "Namaste! I am your Jaan Sathi Assistant. How can I help you today? You can ask me how to report potholes, where to find volunteer missions, how to earn community points, or check your profile level!"
+    text: "Namaste! I am your Jan Sathi Assistant. How can I help you today? You can ask me how to report potholes, where to find volunteer missions, how to earn community points, or check your profile level!"
   }
 ];
 
@@ -104,7 +104,7 @@ export default function Chatbot() {
                 <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-400 rounded-full border-2 border-sky-400" />
               </div>
               <div className="text-left text-white">
-                <span className="block text-xs font-black tracking-tight">{t("Jaan Sathi AI")}</span>
+                <span className="block text-xs font-black tracking-tight">{t("Jan Sathi AI")}</span>
                 <span className="text-[9px] text-sky-100 font-bold mt-0.5 block leading-none">{t("Online • 24/7 Civic Assistant")}</span>
               </div>
             </div>

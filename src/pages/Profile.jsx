@@ -844,7 +844,7 @@ export default function Profile() {
                     <span className="text-xs text-slate-500 italic block py-2">No activity records logged.</span>
                   ) : (
                     (user.impactTimeline || [
-                      { id: 'act-01', title: 'Joined JaanSathi Digital Portal', date: user.createdAt, xpReward: 10 },
+                      { id: 'act-01', title: 'Joined JanSathi Digital Portal', date: user.createdAt, xpReward: 10 },
                       { id: 'act-02', title: 'Security audit: Session login successful', date: new Date().toISOString(), xpReward: 5 }
                     ]).map((item) => (
                       <div key={item.id} className="relative group">
@@ -985,7 +985,7 @@ export default function Profile() {
             history: 'Founded in 2024, our group has audited over 200 public spots, and partnered with the PWD department to rebuild 15 park walkways.',
             achievements: 'Best Civic Group Award 2025, Replaced 40+ damaged signposts.',
             partnerships: 'Public Works Department (PWD)',
-            contact: 'downtown-infra@jaansathi-ngo.org',
+            contact: 'downtown-infra@JanSathi-ngo.org',
             gallery: [
               'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&q=80&w=800',
               'https://images.unsplash.com/photo-1540553016722-983e48a2cd10?auto=format&fit=crop&q=80&w=800'
@@ -1013,7 +1013,7 @@ export default function Profile() {
             history: 'A citizen-led alliance formed during the 2024 streetlights safety audit. We report dark alleys, potholes, and broken signals.',
             achievements: 'Triggered 50+ signal repairs, mapped 100+ low-light spots.',
             partnerships: 'Traffic Police Division & BBMP',
-            contact: 'watch-council@jaansathi-ngo.org',
+            contact: 'watch-council@JanSathi-ngo.org',
             gallery: [
               'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&q=80&w=800',
               'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=800'
@@ -1041,7 +1041,7 @@ export default function Profile() {
             history: 'Eco volunteers starting as a 5-person cleanup club in 2023. Now hosting weekly clean drives and zero waste workshops.',
             achievements: 'Cleaned 3 major city lakesides, distributed 300+ dry/wet waste bins.',
             partnerships: 'Waste Management Dept & BBMP',
-            contact: 'eco-volunteers@jaansathi-ngo.org',
+            contact: 'eco-volunteers@JanSathi-ngo.org',
             gallery: [
               'https://images.unsplash.com/photo-1618477388954-7852f32655ec?auto=format&fit=crop&q=80&w=800',
               'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&q=80&w=800'

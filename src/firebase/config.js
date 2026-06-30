@@ -34,7 +34,7 @@ if (!isMockFirebase) {
     storage = null;
   }
 } else {
-  console.warn("Jaan Sathi is running in local MOCK FIREBASE mode. Configure real credentials in the .env file to enable live Firestore syncing.");
+  console.warn("Jan Sathi is running in local MOCK FIREBASE mode. Configure real credentials in the .env file to enable live Firestore syncing.");
 }
 
 export { app, auth, db, storage, isMockFirebase };

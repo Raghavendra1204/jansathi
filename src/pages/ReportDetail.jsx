@@ -229,7 +229,7 @@ export default function ReportDetail() {
     setCommentSubmitting(true);
     try {
       const authorAvatar = user.avatar || null;
-      const newComment = await addComment(report.id, commentText, user.name, authorAvatar);
+      const newComment = await addComment(report.id, commentText, user.name, authorAvatar, user.uid);
       // Only update local report list immediately in mock mode
       if (isMockFirebase) {
         setReport(prev => ({
