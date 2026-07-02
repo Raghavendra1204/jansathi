@@ -7,6 +7,7 @@ import {
   GoogleAuthProvider
 } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { awardXP } from './api';
 
 // Mock storage helper: fetch all accounts
 const getMockUsers = () => {
@@ -91,6 +92,10 @@ export async function registerUser(email, password, name, role, department = nul
     
     // Trigger auth state listener update
     window.dispatchEvent(new Event('mock-auth-state-change'));
+
+    // Award XP for first-time registration
+    setTimeout(() => awardXP(uid, 10, 'Welcome to Jan Sathi! 🎉'), 500);
+
     return { user: { uid, email }, profile: userProfile };
   }
 
@@ -146,6 +151,8 @@ export async function registerUser(email, password, name, role, department = nul
   };
 
   await setDoc(doc(db, 'users', uid), userProfile);
+  // Award XP for first-time registration
+  setTimeout(() => awardXP(uid, 10, 'Welcome to Jan Sathi! 🎉'), 500);
   return { user: userCredential.user, profile: userProfile };
 }
 

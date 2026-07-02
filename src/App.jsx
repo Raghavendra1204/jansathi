@@ -14,6 +14,7 @@ import EventDetail from './pages/EventDetail';
 import ReportDetail from './pages/ReportDetail';
 import Chatbot from './components/Chatbot';
 import NotificationDrawer from './components/NotificationDrawer';
+import XPToast from './components/XPToast';
 import { TranslationProvider } from './context/TranslationContext';
 
 export default function App() {
@@ -96,6 +97,9 @@ export default function App() {
       }`}>
         {/* Responsive Dashboard Sidebar */}
         {user?.role === 'officer' ? <OfficerSidebar /> : <Sidebar />}
+
+        {/* Global XP Reward Toast Notification */}
+        <XPToast />
 
         {/* Floating AI Assistant Chatbot */}
         <Chatbot />

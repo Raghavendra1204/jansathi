@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { formatDate } from '../utils/helpers';
 import { 
-  fetchNotifications, fetchDocuments, uploadDocument, deleteDocument, updateUserProfile, addNotification, logUserActivity, fetchMissions, fetchReports, updateReport, deleteReport 
+  fetchNotifications, fetchDocuments, uploadDocument, deleteDocument, updateUserProfile, addNotification, logUserActivity, fetchMissions, fetchReports, updateReport, deleteReport, awardXP
 } from '../services/api';
 import { useTranslation } from '../context/TranslationContext';
 import { isMockFirebase } from '../firebase/config';
@@ -296,6 +296,15 @@ export default function Profile() {
     try {
       await updateUserProfile(user.uid, formData);
       await logUserActivity(user.uid, 'Updated Profile Credentials: Name/Contact details', 15);
+
+      // Award +20 XP for completing profile (one-time only)
+      const currentData = JSON.parse(localStorage.getItem('mock_current_user') || '{}');
+      const isProfileComplete = formData.name && formData.phone && formData.location;
+      if (isProfileComplete && !currentData.profileXpAwarded) {
+        await awardXP(user.uid, 20, 'Profile Completed ⭐', user.uid);
+        await updateUserProfile(user.uid, { profileXpAwarded: true });
+      }
+
       setEditMode(false);
       triggerSuccessAlert('Your profile credentials have been saved successfully.');
       if (refetchUser) await refetchUser();

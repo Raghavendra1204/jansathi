@@ -8,7 +8,7 @@ import {
   BrainCircuit, ThumbsUp, Calendar, Trash, ArrowLeft, Cpu, TrendingUp, CheckCircle, ArrowRight
 } from 'lucide-react';
 import { formatDate } from '../utils/helpers';
-import { fetchReports, addNotification, logUserActivity, updateUserProfile, fetchDocuments, reviewDocument, deleteReport, deleteComment } from '../services/api';
+import { fetchReports, addNotification, logUserActivity, updateUserProfile, fetchDocuments, reviewDocument, deleteReport, deleteComment, awardXP } from '../services/api';
 import { doc, updateDoc, setDoc, getDoc, collection, onSnapshot, query, orderBy, addDoc } from 'firebase/firestore';
 import { db, isMockFirebase } from '../firebase/config';
 import { useTranslation } from '../context/TranslationContext';
@@ -1137,6 +1137,11 @@ export default function OfficerDashboard() {
 
       // Award XP to officer
       await logUserActivity(user.uid, `Dispatched/Resolved issue #${selectedReport.id.substring(0, 6)}`, 20);
+
+      // If resolved, award +150 XP to the citizen who reported the issue
+      if (statusVal === 'Resolved' && selectedReport.userId) {
+        await awardXP(selectedReport.userId, 150, 'Your Issue Was Resolved! ✅', selectedReport.id);
+      }
 
       triggerSuccessAlert(`Incident status successfully marked as "${statusVal}"!`);
       setSelectedReport(prev => ({ ...prev, ...updateData }));

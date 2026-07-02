@@ -15,6 +15,205 @@ import { db, isMockFirebase } from '../firebase/config';
 
 // API services for Jan Sathi database
 
+// --- CENTRALIZED XP REWARD SYSTEM ---
+/**
+ * Awards XP to a user for a civic action.
+ * - Updates users/{uid} xp, level, nextLevelXp in Firestore
+ * - Writes a record to xp_log collection
+ * - Fires 'xp-awarded' window event to trigger XPToast popup
+ * - Adds entry to activity log
+ */
+export async function awardXP(uid, amount, action, relatedId = '') {
+  if (!uid || !amount || amount <= 0) return null;
+
+  // Fire the toast popup event immediately (UI feedback)
+  window.dispatchEvent(new CustomEvent('xp-awarded', { detail: { amount, action } }));
+
+  if (isMockFirebase) {
+    const users = JSON.parse(localStorage.getItem('mock_users') || '{}');
+    const currentSession = JSON.parse(localStorage.getItem('mock_current_user') || '{}');
+    const user = users[uid] || currentSession;
+    if (!user) return null;
+
+    const prevXp = user.xp || 0;
+    let newXp = prevXp + amount;
+    let newLevel = user.level || 1;
+    let newNextLevelXp = user.nextLevelXp || 1000;
+
+    // Level up logic
+    while (newXp >= newNextLevelXp) {
+      newXp -= newNextLevelXp;
+      newLevel += 1;
+      newNextLevelXp = newLevel * 1000;
+
+      // Level up notification
+      const notifications = JSON.parse(localStorage.getItem('jan_sathi_notifications') || '[]');
+      notifications.unshift({
+        id: `n-lvl-${Date.now()}`,
+        category: 'System Announcements',
+        title: `Level Up! You reached Level ${newLevel}`,
+        message: `Congratulations! You have reached Level ${newLevel} in the Jan Sathi Citizen Guild. Keep contributing to your community!`,
+        time: 'Just now',
+        read: false,
+        userId: uid
+      });
+      localStorage.setItem('jan_sathi_notifications', JSON.stringify(notifications));
+    }
+
+    // XP gain notification
+    const xpNotifications = JSON.parse(localStorage.getItem('jan_sathi_notifications') || '[]');
+    xpNotifications.unshift({
+      id: `n-xp-${Date.now()}`,
+      category: 'XP Rewards',
+      title: `+${amount} XP Earned`,
+      message: `You earned ${amount} XP for: ${action}. Your total XP is now ${newXp}.`,
+      time: 'Just now',
+      read: false,
+      userId: uid
+    });
+    localStorage.setItem('jan_sathi_notifications', JSON.stringify(xpNotifications));
+
+    // Update user XP
+    const updatedUser = { ...user, xp: newXp, level: newLevel, nextLevelXp: newNextLevelXp };
+    if (users[uid]) {
+      users[uid] = { ...users[uid], xp: newXp, level: newLevel, nextLevelXp: newNextLevelXp };
+      localStorage.setItem('mock_users', JSON.stringify(users));
+    }
+
+    // Update active session if this is the logged-in user
+    if (currentSession.uid === uid) {
+      const sessionUpdate = { ...currentSession, xp: newXp, level: newLevel, nextLevelXp: newNextLevelXp };
+      localStorage.setItem('mock_current_user', JSON.stringify(sessionUpdate));
+      window.dispatchEvent(new Event('mock-auth-state-change'));
+      window.dispatchEvent(new Event('refresh-notifications'));
+    }
+
+    // Write to xp_log mock
+    const xpLog = JSON.parse(localStorage.getItem('jan_sathi_xp_log') || '[]');
+    xpLog.unshift({
+      id: `xp-log-${Date.now()}`,
+      userId: uid,
+      userName: user.name || 'Citizen',
+      action,
+      xpAwarded: amount,
+      timestamp: new Date().toISOString(),
+      relatedId
+    });
+    localStorage.setItem('jan_sathi_xp_log', JSON.stringify(xpLog));
+
+    // Also add to activity timeline
+    const actLogs = JSON.parse(localStorage.getItem('mock_activity_logs') || '[]');
+    actLogs.unshift({
+      id: `act-${Date.now()}`,
+      userId: uid,
+      userName: user.name || 'Citizen',
+      type: 'XP Reward',
+      title: `+${amount} XP — ${action}`,
+      description: `Earned ${amount} XP for: ${action}`,
+      xpEarned: amount,
+      xpReward: amount,
+      status: 'Completed',
+      date: new Date().toISOString(),
+      relatedResourceId: relatedId
+    });
+    localStorage.setItem('mock_activity_logs', JSON.stringify(actLogs));
+
+    // Also update impactTimeline on user
+    if (users[uid]) {
+      if (!users[uid].impactTimeline) users[uid].impactTimeline = [];
+      users[uid].impactTimeline.unshift({
+        id: `act-${Date.now()}`,
+        title: `+${amount} XP — ${action}`,
+        date: new Date().toISOString(),
+        xpReward: amount,
+        type: 'XP Reward',
+        description: `Earned ${amount} XP for: ${action}`,
+        status: 'Completed',
+        relatedResourceId: relatedId
+      });
+      localStorage.setItem('mock_users', JSON.stringify(users));
+    }
+
+    return updatedUser;
+  }
+
+  // Real Firestore mode
+  try {
+    const userRef = doc(db, 'users', uid);
+    const userSnap = await getDoc(userRef);
+    let xp = 0, level = 1, nextLevelXp = 1000, userName = 'Citizen';
+
+    if (userSnap.exists()) {
+      const data = userSnap.data();
+      xp = data.xp || 0;
+      level = data.level || 1;
+      nextLevelXp = data.nextLevelXp || 1000;
+      userName = data.name || 'Citizen';
+    }
+
+    let newXp = xp + amount;
+    let newLevel = level;
+    let newNextLevelXp = nextLevelXp;
+
+    while (newXp >= newNextLevelXp) {
+      newXp -= newNextLevelXp;
+      newLevel += 1;
+      newNextLevelXp = newLevel * 1000;
+    }
+
+    // Update user doc
+    await setDoc(userRef, { xp: newXp, level: newLevel, nextLevelXp: newNextLevelXp }, { merge: true });
+
+    // Write to xp_log collection
+    await addDoc(collection(db, 'xp_log'), {
+      userId: uid,
+      userName,
+      action,
+      xpAwarded: amount,
+      timestamp: new Date().toISOString(),
+      relatedId
+    });
+
+    // Write to activityLogs collection
+    await addDoc(collection(db, 'activityLogs'), {
+      userId: uid,
+      userName,
+      type: 'XP Reward',
+      description: `Earned ${amount} XP for: ${action}`,
+      xpEarned: amount,
+      status: 'Completed',
+      timestamp: new Date().toISOString(),
+      relatedResourceId: relatedId
+    });
+
+    // Add notification to Firestore
+    await addDoc(collection(db, 'notifications'), {
+      userId: uid,
+      category: 'XP Rewards',
+      title: `+${amount} XP Earned`,
+      message: `You earned ${amount} XP for: ${action}. Your total XP is now ${newXp}.`,
+      timestamp: new Date().toISOString(),
+      read: false
+    });
+
+    // Update active session
+    const currentSession = JSON.parse(localStorage.getItem('mock_current_user') || '{}');
+    if (currentSession.uid === uid) {
+      const sessionUpdate = { ...currentSession, xp: newXp, level: newLevel, nextLevelXp: newNextLevelXp };
+      localStorage.setItem('mock_current_user', JSON.stringify(sessionUpdate));
+      window.dispatchEvent(new Event('mock-auth-state-change'));
+      window.dispatchEvent(new Event('refresh-notifications'));
+    }
+
+    return { uid, xp: newXp, level: newLevel, nextLevelXp: newNextLevelXp };
+  } catch (error) {
+    console.error('Error awarding XP:', error);
+    return null;
+  }
+}
+
+
+
 const MOCK_MISSIONS = [
   {
     id: 'm1',
@@ -259,6 +458,10 @@ export async function joinMission(missionId) {
     joined.push(missionId);
     saveJoinedMissions(joined);
 
+    // Award XP for joining a mission/event
+    const currentSession = JSON.parse(localStorage.getItem('mock_current_user') || '{}');
+    if (currentSession.uid) await awardXP(currentSession.uid, 20, 'Joined Event/Mission 🌟', missionId);
+
     return { success: true, message: `Successfully registered for mission: ${mission.title}!` };
   }
 
@@ -285,6 +488,10 @@ export async function joinMission(missionId) {
 
     joined.push(missionId);
     saveJoinedMissions(joined);
+
+    // Award XP for joining a mission/event
+    const currentSession2 = JSON.parse(localStorage.getItem('mock_current_user') || '{}');
+    if (currentSession2.uid) await awardXP(currentSession2.uid, 20, 'Joined Event/Mission 🌟', missionId);
 
     return { success: true, message: `Successfully registered for mission: ${mission.title}!` };
   } catch (error) {
@@ -385,6 +592,9 @@ export async function createReport(title, category, location, description, image
     saveStoredNotifications(notifications);
     window.dispatchEvent(new Event('refresh-notifications'));
 
+    // Award XP for reporting an issue
+    await awardXP(uid, 100, 'Issue Reported 🗺️', newReport.id);
+
     return newReport;
   }
 
@@ -412,7 +622,10 @@ export async function createReport(title, category, location, description, image
     };
 
     const docRef = await addDoc(collection(db, 'reports'), newReport);
-    return { id: docRef.id, ...newReport };
+    const createdReport = { id: docRef.id, ...newReport };
+    // Award XP for reporting an issue
+    await awardXP(auth.currentUser?.uid || uid, 100, 'Issue Reported 🗺️', docRef.id);
+    return createdReport;
   } catch (error) {
     console.error("Error creating report in Firestore:", error);
     throw error;
@@ -538,6 +751,11 @@ export async function voteReport(reportId, userId, voteType) {
     saveStoredNotifications(notifications);
     window.dispatchEvent(new Event('refresh-notifications'));
 
+    // Award +5 XP to the report OWNER when they receive an upvote
+    if (voteType === 'up' && currentVote !== 'up' && report.userId && report.userId !== userId) {
+      await awardXP(report.userId, 5, 'Upvote Received 👍', reportId);
+    }
+
     return report;
   }
 
@@ -568,6 +786,11 @@ export async function voteReport(reportId, userId, voteType) {
       upvotes: report.upvotes,
       downvotes: report.downvotes
     });
+
+    // Award +5 XP to the report OWNER when they receive an upvote
+    if (voteType === 'up' && report.userId && report.userId !== userId) {
+      await awardXP(report.userId, 5, 'Upvote Received 👍', reportId);
+    }
 
     return { id: reportId, ...report };
   } catch (error) {
@@ -611,6 +834,9 @@ export async function addComment(reportId, commentText, authorName, authorAvatar
     saveStoredNotifications(notifications);
     window.dispatchEvent(new Event('refresh-notifications'));
 
+    // Award XP to the commenter
+    if (authorId) await awardXP(authorId, 5, 'Comment Posted 💬', reportId);
+
     return newComment;
   }
 
@@ -619,6 +845,8 @@ export async function addComment(reportId, commentText, authorName, authorAvatar
     await updateDoc(docRef, {
       comments: arrayUnion(newComment)
     });
+    // Award XP to the commenter
+    if (authorId) await awardXP(authorId, 5, 'Comment Posted 💬', reportId);
     return newComment;
   } catch (error) {
     console.error("Error adding comment in Firestore:", error);
@@ -988,7 +1216,7 @@ export async function uploadDocument(name, category, size, fileData = '', fileOb
     mockDbDocs.unshift(newDoc);
     localStorage.setItem('mock_db_documents', JSON.stringify(mockDbDocs));
 
-    await logUserActivity(uid, `Uploaded document: ${name}`, 25, 'Document Uploaded', `Uploaded ${category} verification doc: ${name}`, 'Pending');
+    await awardXP(uid, 40, 'Document Uploaded 📄', newDoc.id);
 
     return newDoc;
   }
@@ -1049,7 +1277,7 @@ export async function uploadDocument(name, category, size, fileData = '', fileOb
     const docRef = doc(db, 'documents', docId);
     await setDoc(docRef, newDoc);
 
-    await logUserActivity(uid, `Uploaded document: ${name}`, 25, 'Document Uploaded', `Uploaded ${category} verification doc: ${name}`, 'Pending');
+    await awardXP(uid, 40, 'Document Uploaded 📄', docId);
 
     return newDoc;
   } catch (error) {
