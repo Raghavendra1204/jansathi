@@ -202,6 +202,35 @@ export default function OfficerDashboard() {
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
   const reportsPerPage = 6;
 
+  const filteredReports = React.useMemo(() => {
+    return reports.filter(r => {
+      const matchesSearch = r.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                            r.description.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                            r.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                            r.id.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesStatus = statusFilter === 'All' || r.status === statusFilter;
+      const matchesCategory = categoryFilter === 'All' || r.category === categoryFilter;
+      const matchesSeverity = severityFilter === 'All' || r.severity === severityFilter;
+      const matchesAssigned = assignedMeFilter 
+        ? (r.assignedOfficer === (user?.name || '') || (!r.assignedOfficer && (user?.name || ''))) 
+        : true;
+      
+      let matchesDate = true;
+      if (dateRange.start && dateRange.end) {
+        matchesDate = r.date >= dateRange.start && r.date <= dateRange.end;
+      }
+
+      const region = getReportRegion(r);
+      const matchesState = !selectedState || region.state === selectedState;
+      const matchesDistrict = !selectedDistrict || region.district === selectedDistrict;
+      const matchesCity = !selectedCity || region.city === selectedCity;
+      const matchesSector = !selectedSector || region.sector === selectedSector;
+      const matchesWard = !selectedWard || region.ward === selectedWard;
+
+      return matchesSearch && matchesStatus && matchesCategory && matchesSeverity && matchesAssigned && matchesDate && matchesState && matchesDistrict && matchesCity && matchesSector && matchesWard;
+    });
+  }, [reports, searchTerm, statusFilter, categoryFilter, severityFilter, assignedMeFilter, dateRange, user, selectedState, selectedDistrict, selectedCity, selectedSector, selectedWard]);
+
   // Officer Actions State
   const [actionDept, setActionDept] = useState('');
   const [actionStaff, setActionStaff] = useState('');
@@ -1227,32 +1256,7 @@ export default function OfficerDashboard() {
     }
   };
 
-  const filteredReports = reports.filter(r => {
-    const matchesSearch = r.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          r.description.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          r.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          r.id.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'All' || r.status === statusFilter;
-    const matchesCategory = categoryFilter === 'All' || r.category === categoryFilter;
-    const matchesSeverity = severityFilter === 'All' || r.severity === severityFilter;
-    const matchesAssigned = assignedMeFilter 
-      ? (r.assignedOfficer === (user?.name || '') || (!r.assignedOfficer && (user?.name || ''))) 
-      : true;
-    
-    let matchesDate = true;
-    if (dateRange.start && dateRange.end) {
-      matchesDate = r.date >= dateRange.start && r.date <= dateRange.end;
-    }
 
-    const region = getReportRegion(r);
-    const matchesState = !selectedState || region.state === selectedState;
-    const matchesDistrict = !selectedDistrict || region.district === selectedDistrict;
-    const matchesCity = !selectedCity || region.city === selectedCity;
-    const matchesSector = !selectedSector || region.sector === selectedSector;
-    const matchesWard = !selectedWard || region.ward === selectedWard;
-
-    return matchesSearch && matchesStatus && matchesCategory && matchesSeverity && matchesAssigned && matchesDate && matchesState && matchesDistrict && matchesCity && matchesSector && matchesWard;
-  });
 
   const sortedReports = [...filteredReports].sort((a, b) => {
     if (prioritySort === 'desc') {
