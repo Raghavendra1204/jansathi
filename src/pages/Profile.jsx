@@ -502,6 +502,60 @@ export default function Profile() {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-[70vh] flex items-center justify-center">
+        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="max-w-md mx-auto min-h-[70vh] flex flex-col justify-center items-center px-4 animate-fade-in">
+        <div className="glass p-8 rounded-3xl border border-slate-800/60 shadow-2xl space-y-6 text-center select-none w-full relative overflow-hidden">
+          {/* Subtle background glow */}
+          <div className="absolute -top-12 -left-12 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl pointer-events-none" />
+          <div className="absolute -bottom-12 -right-12 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
+
+          {/* Branding Logo */}
+          <div className="flex justify-center">
+            <div className="p-3 bg-blue-600/10 rounded-2xl border border-blue-500/20 shadow-inner">
+              <img src="/logo.png" alt="JanSathi Logo" className="w-16 h-16 object-contain rounded-xl" />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <h1 className="text-2xl font-black text-white tracking-wider uppercase">
+              JAN <span className="text-blue-500 font-medium">SATHI</span>
+            </h1>
+            <p className="text-slate-400 text-[10px] tracking-widest uppercase font-bold">
+              जन सेवा, हमारा संकल्प
+            </p>
+          </div>
+
+          <div className="border-t border-slate-800/40 my-2" />
+
+          <div className="space-y-4">
+            <h2 className="text-lg font-bold text-white tracking-tight">{t("Login Required")}</h2>
+            <p className="text-slate-400 text-xs leading-relaxed max-w-sm mx-auto">
+              {t("Welcome to Jan Sathi! To manage your profile details, view your citizen verification documents, and check security logs, please sign in or register an account.")}
+            </p>
+          </div>
+
+          <div className="pt-2">
+            <button
+              onClick={() => navigate('/login')}
+              className="w-full py-3 px-6 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-300 transform hover:scale-[1.02] shadow-[0_0_20px_rgba(59,130,246,0.3)] hover:shadow-[0_0_25px_rgba(59,130,246,0.5)] cursor-pointer text-center"
+            >
+              {t("Sign In or Register")}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-5xl mx-auto px-4 py-8 space-y-8 animate-fade-in text-left">
       
