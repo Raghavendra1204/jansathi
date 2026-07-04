@@ -10,6 +10,7 @@ import { createReport, logUserActivity } from '../services/api';
 import MapSelector from '../components/MapSelector';
 import { useTranslation } from '../context/TranslationContext';
 import SeverityBadge from '../components/SeverityBadge';
+import { REGIONS_DATA, getRegionCoordinates } from '../utils/regions';
 
 const CATEGORIES = ['Infrastructure', 'Roads & Safety', 'Sanitation', 'Public Space', 'Other'];
 
@@ -28,6 +29,13 @@ export default function ReportIssue() {
   const [imageFile, setImageFile] = useState(null);
   const [lat, setLat] = useState(12.9716);
   const [lng, setLng] = useState(77.5946);
+
+  // Hierarchical Region Selection States
+  const [selectedState, setSelectedState] = useState('');
+  const [selectedDistrict, setSelectedDistrict] = useState('');
+  const [selectedCity, setSelectedCity] = useState('');
+  const [selectedSector, setSelectedSector] = useState('');
+  const [selectedWard, setSelectedWard] = useState('');
   const [suggestions, setSuggestions] = useState([]);
   const [searchingSuggestions, setSearchingSuggestions] = useState(false);
   const [selectedSuggestionName, setSelectedSuggestionName] = useState('');
@@ -201,19 +209,27 @@ export default function ReportIssue() {
       // Geocode the location address on submit only if coordinates are still at default center
       let finalLat = lat;
       let finalLng = lng;
-      if (lat === 12.9716 && lng === 77.5946 && location) {
-        try {
-          const response = await fetch(
-            `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(location)}&limit=1`,
-            { headers: { 'Accept-Language': 'en' } }
-          );
-          const data = await response.json();
-          if (data && data.length > 0) {
-            finalLat = parseFloat(data[0].lat);
-            finalLng = parseFloat(data[0].lon);
+      if (lat === 12.9716 && lng === 77.5946) {
+        if (selectedState && selectedCity) {
+          const regionCoords = getRegionCoordinates(selectedState, selectedCity);
+          finalLat = regionCoords[0];
+          finalLng = regionCoords[1];
+        }
+        if (location) {
+          try {
+            const queryAddr = `${location}, ${selectedCity || ''}, ${selectedState || ''}`;
+            const response = await fetch(
+              `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(queryAddr)}&limit=1`,
+              { headers: { 'Accept-Language': 'en' } }
+            );
+            const data = await response.json();
+            if (data && data.length > 0) {
+              finalLat = parseFloat(data[0].lat);
+              finalLng = parseFloat(data[0].lon);
+            }
+          } catch (err) {
+            console.error("Geocoding during submit failed:", err);
           }
-        } catch (err) {
-          console.error("Geocoding during submit failed:", err);
         }
       }
 
@@ -230,7 +246,12 @@ export default function ReportIssue() {
         priorityScore,
         severity,
         finalLat,
-        finalLng
+        finalLng,
+        selectedState,
+        selectedDistrict,
+        selectedCity,
+        selectedSector,
+        selectedWard
       );
       if (user) {
         await logUserActivity(user.uid, `Reported Civic Issue: ${title}`, 50, 'Issue Submitted', `Submitted a new civic report titled "${title}"`, 'Completed');
@@ -429,6 +450,123 @@ export default function ReportIssue() {
                 <option key={cat} value={cat}>{t(cat)}</option>
               ))}
             </select>
+          </div>
+
+          {/* Hierarchical Location Pickers */}
+          <div className="space-y-4 p-4.5 rounded-2xl bg-slate-900/50 border border-slate-800/60">
+            <h3 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5 text-left">
+              <MapPin className="w-4 h-4 text-blue-400" />
+              <span>{t("Select Location Region Jurisdiction")}</span>
+            </h3>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* State */}
+              <div className="space-y-1 text-left">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide pl-1">{t("State")}</label>
+                <select
+                  required
+                  value={selectedState}
+                  onChange={(e) => {
+                    setSelectedState(e.target.value);
+                    setSelectedDistrict('');
+                    setSelectedCity('');
+                    setSelectedSector('');
+                    setSelectedWard('');
+                  }}
+                  className="w-full px-4 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-200 text-sm focus:outline-none focus:border-blue-600 transition-colors cursor-pointer font-semibold"
+                >
+                  <option value="">{t("Select State")}</option>
+                  {Object.keys(REGIONS_DATA).map(st => (
+                    <option key={st} value={st}>{t(st)}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* District */}
+              <div className="space-y-1 text-left">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide pl-1">{t("District")}</label>
+                <select
+                  required
+                  disabled={!selectedState}
+                  value={selectedDistrict}
+                  onChange={(e) => {
+                    setSelectedDistrict(e.target.value);
+                    setSelectedCity('');
+                    setSelectedSector('');
+                    setSelectedWard('');
+                  }}
+                  className="w-full px-4 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-200 text-sm focus:outline-none focus:border-blue-600 transition-colors cursor-pointer font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <option value="">{t("Select District")}</option>
+                  {selectedState && Object.keys(REGIONS_DATA[selectedState]).map(dist => (
+                    <option key={dist} value={dist}>{t(dist)}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* City */}
+              <div className="space-y-1 text-left">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide pl-1">{t("City / Town")}</label>
+                <select
+                  required
+                  disabled={!selectedDistrict}
+                  value={selectedCity}
+                  onChange={(e) => {
+                    setSelectedCity(e.target.value);
+                    setSelectedSector('');
+                    setSelectedWard('');
+                    
+                    // Auto-pan coordinates when city is chosen
+                    const coords = getRegionCoordinates(selectedState, e.target.value);
+                    setLat(coords[0]);
+                    setLng(coords[1]);
+                  }}
+                  className="w-full px-4 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-200 text-sm focus:outline-none focus:border-blue-600 transition-colors cursor-pointer font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <option value="">{t("Select City")}</option>
+                  {selectedState && selectedDistrict && Object.keys(REGIONS_DATA[selectedState][selectedDistrict]).map(ct => (
+                    <option key={ct} value={ct}>{t(ct)}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Sector */}
+              <div className="space-y-1 text-left">
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide pl-1">{t("Sector / Zone")}</label>
+                <select
+                  required
+                  disabled={!selectedCity}
+                  value={selectedSector}
+                  onChange={(e) => {
+                    setSelectedSector(e.target.value);
+                    setSelectedWard('');
+                  }}
+                  className="w-full px-4 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-200 text-sm focus:outline-none focus:border-blue-600 transition-colors cursor-pointer font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <option value="">{t("Select Sector / Zone")}</option>
+                  {selectedState && selectedDistrict && selectedCity && Object.keys(REGIONS_DATA[selectedState][selectedDistrict][selectedCity]).map(sec => (
+                    <option key={sec} value={sec}>{t(sec)}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Ward */}
+            <div className="space-y-1 text-left">
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wide pl-1">{t("Ward No. / Name")}</label>
+              <select
+                required
+                disabled={!selectedSector}
+                value={selectedWard}
+                onChange={(e) => setSelectedWard(e.target.value)}
+                className="w-full px-4 py-2.5 bg-slate-950 border border-slate-850 rounded-xl text-slate-200 text-sm focus:outline-none focus:border-blue-600 transition-colors cursor-pointer font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <option value="">{t("Select Ward")}</option>
+                {selectedState && selectedDistrict && selectedCity && selectedSector && REGIONS_DATA[selectedState][selectedDistrict][selectedCity][selectedSector].map(wd => (
+                  <option key={wd} value={wd}>{t(wd)}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {/* Location Selector (Text Input + Interactive Map) */}

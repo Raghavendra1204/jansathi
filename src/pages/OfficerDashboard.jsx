@@ -15,6 +15,7 @@ import { useTranslation } from '../context/TranslationContext';
 import SeverityBadge from '../components/SeverityBadge';
 import ExecutiveReportsConsole from '../components/ExecutiveReportsConsole';
 import { officerChatWithGemini, findDuplicateReportsWithGemini, analyzePredictiveRisksWithGemini, generateResourcePlanWithGemini, analyzeModerationWithGemini, localMockModeration, generateAIInsightsWithGemini } from '../services/gemini';
+import { REGIONS_DATA, getReportRegion, getRegionCoordinates } from '../utils/regions';
 
 // Hardcoded default fallback reports for mock mode
 const INITIAL_MOCK_REPORTS = [
@@ -117,6 +118,13 @@ export default function OfficerDashboard() {
   const detailMapRef = useRef(null);
   const detailMapInstance = useRef(null);
   const heatmapMapInstance = useRef(null);
+
+  // Hierarchical Region Filtering States
+  const [selectedState, setSelectedState] = useState('');
+  const [selectedDistrict, setSelectedDistrict] = useState('');
+  const [selectedCity, setSelectedCity] = useState('');
+  const [selectedSector, setSelectedSector] = useState('');
+  const [selectedWard, setSelectedWard] = useState('');
 
   useEffect(() => {
     if (window.L) {
@@ -823,7 +831,7 @@ export default function OfficerDashboard() {
       heatmapMapInstance.current = null;
     }
     
-    const center = [12.9716, 77.5946];
+    const center = [20.5937, 78.9629]; // Geographic center of India
     const isLight = document.documentElement.classList.contains('light');
     const tileUrl = isLight 
       ? 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
@@ -837,7 +845,7 @@ export default function OfficerDashboard() {
       const map = L.map(container, {
         zoomControl: true,
         attributionControl: false
-      }).setView(center, 12);
+      }).setView(center, 5);
       
       L.tileLayer(tileUrl, { maxZoom: 18 }).addTo(map);
       heatmapMapInstance.current = map;
@@ -929,7 +937,13 @@ export default function OfficerDashboard() {
     if (!L) return;
 
     let map = mapInstance.current;
-    const center = [12.9716, 77.5946]; // Default Bengaluru Center
+    let center = [20.5937, 78.9629]; // Geographic center of India
+    let initialZoom = 5;
+
+    if (selectedState && selectedCity) {
+      center = getRegionCoordinates(selectedState, selectedCity);
+      initialZoom = 12;
+    }
 
     if (!map) {
       const isLight = document.documentElement.classList.contains('light');
@@ -939,7 +953,7 @@ export default function OfficerDashboard() {
 
       map = L.map(mapRef.current, {
         zoomControl: false
-      }).setView(center, 12);
+      }).setView(center, initialZoom);
 
       L.tileLayer(tileUrl, {
         attribution: '&copy; CARTO',
@@ -948,13 +962,21 @@ export default function OfficerDashboard() {
 
       L.control.zoom({ position: 'topright' }).addTo(map);
       mapInstance.current = map;
+    } else {
+      // Dynamically adjust map focus based on filters
+      if (selectedState && selectedCity) {
+        const coords = getRegionCoordinates(selectedState, selectedCity);
+        map.setView(coords, 12, { animate: true });
+      } else if (!selectedState) {
+        map.setView([20.5937, 78.9629], 5, { animate: true });
+      }
     }
 
     // Clear and draw markers
     markersRef.current.forEach(m => m.remove());
     markersRef.current = [];
 
-    reports.forEach((report) => {
+    filteredReports.forEach((report) => {
       if (!report.lat || !report.lng) return;
 
       const color = report.severity === 'Critical' ? '#f43f5e' :
@@ -989,7 +1011,7 @@ export default function OfficerDashboard() {
       markersRef.current.push(marker);
     });
 
-  }, [activeTab, reports, loadingReports, mapLoading]);
+  }, [activeTab, reports, filteredReports, loadingReports, mapLoading, selectedState, selectedCity]);
 
   // Sync details fields when selecting different reports
   useEffect(() => {
@@ -1222,7 +1244,14 @@ export default function OfficerDashboard() {
       matchesDate = r.date >= dateRange.start && r.date <= dateRange.end;
     }
 
-    return matchesSearch && matchesStatus && matchesCategory && matchesSeverity && matchesAssigned && matchesDate;
+    const region = getReportRegion(r);
+    const matchesState = !selectedState || region.state === selectedState;
+    const matchesDistrict = !selectedDistrict || region.district === selectedDistrict;
+    const matchesCity = !selectedCity || region.city === selectedCity;
+    const matchesSector = !selectedSector || region.sector === selectedSector;
+    const matchesWard = !selectedWard || region.ward === selectedWard;
+
+    return matchesSearch && matchesStatus && matchesCategory && matchesSeverity && matchesAssigned && matchesDate && matchesState && matchesDistrict && matchesCity && matchesSector && matchesWard;
   });
 
   const sortedReports = [...filteredReports].sort((a, b) => {
@@ -1355,6 +1384,134 @@ export default function OfficerDashboard() {
       {activeTab === 'command-center' && (
         <div className="space-y-8 animate-fade-in">
           
+          {/* Geographic Hierarchy Location Filter Widget */}
+          <section className="glass p-5 rounded-3xl border border-slate-800/60 shadow-xl space-y-4 text-left select-none animate-fade-in relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-2xl pointer-events-none" />
+            
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+              <div className="flex items-center gap-2">
+                <MapPin className="w-4 h-4 text-blue-400" />
+                <div>
+                  <h3 className="text-xs font-black uppercase tracking-wider text-white">{t("Geographic Jurisdiction Filter")}</h3>
+                  <p className="text-[10px] text-slate-400 font-medium">{t("Drill down issues by State → District → City → Sector → Ward")}</p>
+                </div>
+              </div>
+              {(selectedState || selectedDistrict || selectedCity || selectedSector || selectedWard) && (
+                <button
+                  onClick={() => {
+                    setSelectedState('');
+                    setSelectedDistrict('');
+                    setSelectedCity('');
+                    setSelectedSector('');
+                    setSelectedWard('');
+                  }}
+                  className="py-1 px-3 bg-slate-900/50 hover:bg-slate-900 border border-slate-800 text-[9px] font-black uppercase tracking-wider text-rose-455 hover:text-rose-350 rounded-xl transition-all cursor-pointer"
+                >
+                  {t("Clear Place Filters")}
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3.5 pt-1">
+              {/* State Selection */}
+              <div className="space-y-1">
+                <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest block pl-1">{t("State")}</label>
+                <select
+                  value={selectedState}
+                  onChange={(e) => {
+                    setSelectedState(e.target.value);
+                    setSelectedDistrict('');
+                    setSelectedCity('');
+                    setSelectedSector('');
+                    setSelectedWard('');
+                  }}
+                  className="w-full px-3 py-2 bg-slate-950/80 border border-slate-850/80 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-blue-600 transition-colors cursor-pointer font-semibold"
+                >
+                  <option value="">{t("All States")}</option>
+                  {Object.keys(REGIONS_DATA).map(st => (
+                    <option key={st} value={st}>{t(st)}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* District Selection */}
+              <div className="space-y-1">
+                <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest block pl-1">{t("District")}</label>
+                <select
+                  value={selectedDistrict}
+                  disabled={!selectedState}
+                  onChange={(e) => {
+                    setSelectedDistrict(e.target.value);
+                    setSelectedCity('');
+                    setSelectedSector('');
+                    setSelectedWard('');
+                  }}
+                  className="w-full px-3 py-2 bg-slate-950/80 border border-slate-850/80 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-blue-600 transition-colors cursor-pointer font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <option value="">{t("All Districts")}</option>
+                  {selectedState && Object.keys(REGIONS_DATA[selectedState]).map(dist => (
+                    <option key={dist} value={dist}>{t(dist)}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* City Selection */}
+              <div className="space-y-1">
+                <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest block pl-1">{t("City")}</label>
+                <select
+                  value={selectedCity}
+                  disabled={!selectedDistrict}
+                  onChange={(e) => {
+                    setSelectedCity(e.target.value);
+                    setSelectedSector('');
+                    setSelectedWard('');
+                  }}
+                  className="w-full px-3 py-2 bg-slate-950/80 border border-slate-850/80 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-blue-600 transition-colors cursor-pointer font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <option value="">{t("All Cities")}</option>
+                  {selectedState && selectedDistrict && Object.keys(REGIONS_DATA[selectedState][selectedDistrict]).map(ct => (
+                    <option key={ct} value={ct}>{t(ct)}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Sector Selection */}
+              <div className="space-y-1">
+                <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest block pl-1">{t("Sector / Zone")}</label>
+                <select
+                  value={selectedSector}
+                  disabled={!selectedCity}
+                  onChange={(e) => {
+                    setSelectedSector(e.target.value);
+                    setSelectedWard('');
+                  }}
+                  className="w-full px-3 py-2 bg-slate-950/80 border border-slate-850/80 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-blue-600 transition-colors cursor-pointer font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <option value="">{t("All Sectors")}</option>
+                  {selectedState && selectedDistrict && selectedCity && Object.keys(REGIONS_DATA[selectedState][selectedDistrict][selectedCity]).map(sec => (
+                    <option key={sec} value={sec}>{t(sec)}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Ward Selection */}
+              <div className="space-y-1">
+                <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest block pl-1">{t("Ward No.")}</label>
+                <select
+                  value={selectedWard}
+                  disabled={!selectedSector}
+                  onChange={(e) => setSelectedWard(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-950/80 border border-slate-850/80 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-blue-600 transition-colors cursor-pointer font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <option value="">{t("All Wards")}</option>
+                  {selectedState && selectedDistrict && selectedCity && selectedSector && REGIONS_DATA[selectedState][selectedDistrict][selectedCity][selectedSector].map(wd => (
+                    <option key={wd} value={wd}>{t(wd)}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </section>
+
           {/* 1. TOP METRICS BLOCK */}
           <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[

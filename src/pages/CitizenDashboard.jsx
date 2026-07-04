@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { 
@@ -11,6 +11,7 @@ import {
 import { formatDate } from '../utils/helpers';
 import { useTranslation } from '../context/TranslationContext';
 import { fetchReports, createReport, updateReport, deleteReport } from '../services/api';
+import { REGIONS_DATA, getReportRegion, getRegionCoordinates } from '../utils/regions';
 
 const MOCK_REPORTS = [
   {
@@ -109,6 +110,13 @@ export default function CitizenDashboard() {
   const [viewMode, setViewMode] = useState('feed'); // 'feed' or 'map'
   const [selectedMapReport, setSelectedMapReport] = useState(null);
   const { t } = useTranslation();
+  
+  // Hierarchical Region Filtering States
+  const [selectedState, setSelectedState] = useState('');
+  const [selectedDistrict, setSelectedDistrict] = useState('');
+  const [selectedCity, setSelectedCity] = useState('');
+  const [selectedSector, setSelectedSector] = useState('');
+  const [selectedWard, setSelectedWard] = useState('');
 
   const matchesStatusFilter = (r) => {
     if (statusFilter === 'All') return true;
@@ -267,42 +275,55 @@ export default function CitizenDashboard() {
       }
     }
 
-    function initLeafletMap() {
-      const L = window.L;
-      if (!L) return;
+      function initLeafletMap() {
+        const L = window.L;
+        if (!L) return;
 
-      let map = mapInstance.current;
+        let map = mapInstance.current;
 
-      if (!map) {
-        const center = [12.9716, 77.5946];
-        const isDark = document.documentElement.classList.contains('dark');
-        const tileUrl = isDark 
-          ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png' 
-          : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+        if (!map) {
+          let center = [20.5937, 78.9629]; // Geographic center of India
+          let initialZoom = 5;
 
-        map = L.map('leaflet-map-container', {
-          zoomControl: false
-        }).setView(center, 12);
+          if (selectedState && selectedCity) {
+            center = getRegionCoordinates(selectedState, selectedCity);
+            initialZoom = 12;
+          }
 
-        L.tileLayer(tileUrl, {
-          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-          maxZoom: 20
-        }).addTo(map);
+          const isDark = document.documentElement.classList.contains('dark');
+          const tileUrl = isDark 
+            ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png' 
+            : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
 
-        L.control.zoom({ position: 'topright' }).addTo(map);
-        mapInstance.current = map;
-      }
+          map = L.map('leaflet-map-container', {
+            zoomControl: false
+          }).setView(center, initialZoom);
 
-      // Clear existing markers
-      markersRef.current.forEach(m => m.remove());
-      markersRef.current = [];
+          L.tileLayer(tileUrl, {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+            maxZoom: 20
+          }).addTo(map);
 
-      const markerLatLngs = [];
+          L.control.zoom({ position: 'topright' }).addTo(map);
+          mapInstance.current = map;
+        } else {
+          // Dynamically adjust map focus based on filters
+          if (selectedState && selectedCity) {
+            const coords = getRegionCoordinates(selectedState, selectedCity);
+            map.setView(coords, 12, { animate: true });
+          } else if (!selectedState) {
+            map.setView([20.5937, 78.9629], 5, { animate: true });
+          }
+        }
 
-      // Render markers
-      reports
-        .filter(matchesStatusFilter)
-        .forEach((report) => {
+        // Clear existing markers
+        markersRef.current.forEach(m => m.remove());
+        markersRef.current = [];
+
+        const markerLatLngs = [];
+
+        // Render markers from processedReports (hierarchical location filter applied)
+        processedReports.forEach((report) => {
           if (!report.lat || !report.lng) return;
 
           markerLatLngs.push([report.lat, report.lng]);
@@ -375,7 +396,25 @@ export default function CitizenDashboard() {
         mapInstance.current = null;
       }
     };
-  }, [viewMode, statusFilter, reports, theme]);
+  }, [viewMode, statusFilter, reports, theme, selectedState, selectedDistrict, selectedCity, selectedSector, selectedWard]);
+
+  // Filtered reports based on status AND place hierarchy
+  const processedReports = useMemo(() => {
+    return reports.filter(r => {
+      // 1. Status Filter
+      if (!matchesStatusFilter(r)) return false;
+      
+      // 2. Hierarchical Region Filter
+      const region = getReportRegion(r);
+      if (selectedState && region.state !== selectedState) return false;
+      if (selectedDistrict && region.district !== selectedDistrict) return false;
+      if (selectedCity && region.city !== selectedCity) return false;
+      if (selectedSector && region.sector !== selectedSector) return false;
+      if (selectedWard && region.ward !== selectedWard) return false;
+      
+      return true;
+    });
+  }, [reports, statusFilter, selectedState, selectedDistrict, selectedCity, selectedSector, selectedWard]);
 
   const getStats = () => {
     const submitted = reports.filter(r => r.status === 'Submitted').length;
@@ -545,6 +584,134 @@ export default function CitizenDashboard() {
         </div>
       </section>
 
+      {/* Geographic Hierarchy Location Filter Widget */}
+      <section className="glass p-5 rounded-3xl border border-slate-800/60 shadow-xl space-y-4 text-left select-none animate-fade-in relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-2xl pointer-events-none" />
+        
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+          <div className="flex items-center gap-2">
+            <MapPin className="w-4 h-4 text-blue-400" />
+            <div>
+              <h3 className="text-xs font-black uppercase tracking-wider text-white">{t("Geographic Jurisdiction Filter")}</h3>
+              <p className="text-[10px] text-slate-400 font-medium">{t("Drill down issues by State → District → City → Sector → Ward")}</p>
+            </div>
+          </div>
+          {(selectedState || selectedDistrict || selectedCity || selectedSector || selectedWard) && (
+            <button
+              onClick={() => {
+                setSelectedState('');
+                setSelectedDistrict('');
+                setSelectedCity('');
+                setSelectedSector('');
+                setSelectedWard('');
+              }}
+              className="py-1 px-3 bg-slate-900/50 hover:bg-slate-900 border border-slate-800 text-[9px] font-black uppercase tracking-wider text-rose-455 hover:text-rose-350 rounded-xl transition-all cursor-pointer"
+            >
+              {t("Clear Place Filters")}
+            </button>
+          )}
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3.5 pt-1">
+          {/* State Selection */}
+          <div className="space-y-1">
+            <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest block pl-1">{t("State")}</label>
+            <select
+              value={selectedState}
+              onChange={(e) => {
+                setSelectedState(e.target.value);
+                setSelectedDistrict('');
+                setSelectedCity('');
+                setSelectedSector('');
+                setSelectedWard('');
+              }}
+              className="w-full px-3 py-2 bg-slate-950/80 border border-slate-850/80 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-blue-600 transition-colors cursor-pointer font-semibold"
+            >
+              <option value="">{t("All States")}</option>
+              {Object.keys(REGIONS_DATA).map(st => (
+                <option key={st} value={st}>{t(st)}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* District Selection */}
+          <div className="space-y-1">
+            <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest block pl-1">{t("District")}</label>
+            <select
+              value={selectedDistrict}
+              disabled={!selectedState}
+              onChange={(e) => {
+                setSelectedDistrict(e.target.value);
+                setSelectedCity('');
+                setSelectedSector('');
+                setSelectedWard('');
+              }}
+              className="w-full px-3 py-2 bg-slate-950/80 border border-slate-850/80 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-blue-600 transition-colors cursor-pointer font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <option value="">{t("All Districts")}</option>
+              {selectedState && Object.keys(REGIONS_DATA[selectedState]).map(dist => (
+                <option key={dist} value={dist}>{t(dist)}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* City Selection */}
+          <div className="space-y-1">
+            <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest block pl-1">{t("City")}</label>
+            <select
+              value={selectedCity}
+              disabled={!selectedDistrict}
+              onChange={(e) => {
+                setSelectedCity(e.target.value);
+                setSelectedSector('');
+                setSelectedWard('');
+              }}
+              className="w-full px-3 py-2 bg-slate-950/80 border border-slate-850/80 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-blue-600 transition-colors cursor-pointer font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <option value="">{t("All Cities")}</option>
+              {selectedState && selectedDistrict && Object.keys(REGIONS_DATA[selectedState][selectedDistrict]).map(ct => (
+                <option key={ct} value={ct}>{t(ct)}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Sector Selection */}
+          <div className="space-y-1">
+            <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest block pl-1">{t("Sector / Zone")}</label>
+            <select
+              value={selectedSector}
+              disabled={!selectedCity}
+              onChange={(e) => {
+                setSelectedSector(e.target.value);
+                setSelectedWard('');
+              }}
+              className="w-full px-3 py-2 bg-slate-950/80 border border-slate-850/80 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-blue-600 transition-colors cursor-pointer font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <option value="">{t("All Sectors")}</option>
+              {selectedState && selectedDistrict && selectedCity && Object.keys(REGIONS_DATA[selectedState][selectedDistrict][selectedCity]).map(sec => (
+                <option key={sec} value={sec}>{t(sec)}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Ward Selection */}
+          <div className="space-y-1">
+            <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest block pl-1">{t("Ward No.")}</label>
+            <select
+              value={selectedWard}
+              disabled={!selectedSector}
+              onChange={(e) => setSelectedWard(e.target.value)}
+              className="w-full px-3 py-2 bg-slate-950/80 border border-slate-850/80 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-blue-600 transition-colors cursor-pointer font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <option value="">{t("All Wards")}</option>
+              {selectedState && selectedDistrict && selectedCity && selectedSector && REGIONS_DATA[selectedState][selectedDistrict][selectedCity][selectedSector].map(wd => (
+                <option key={wd} value={wd}>{t(wd)}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </section>
+
       {/* Main Grid: Reports List & Submit Panel */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
@@ -675,21 +842,27 @@ export default function CitizenDashboard() {
                 </div>
               </div>
             ) : (
-              reports.filter(matchesStatusFilter).length === 0 ? (
+              processedReports.length === 0 ? (
               <div className="p-12 text-center bg-slate-900/10 border border-dashed border-slate-800/40 rounded-2xl text-slate-500 space-y-2">
                 <Clock className="w-8 h-8 mx-auto text-slate-650 animate-pulse" />
                 <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">{t("No Reports Found")}</h4>
-                <p className="text-[11px] text-slate-550 max-w-xs mx-auto">{t("No reports in your workspace timeline match the selected status category filter.")}</p>
+                <p className="text-[11px] text-slate-550 max-w-xs mx-auto">{t("No reports in your workspace timeline match the selected status category or place filters.")}</p>
                 <button 
-                  onClick={() => setStatusFilter('All')} 
+                  onClick={() => {
+                    setStatusFilter('All');
+                    setSelectedState('');
+                    setSelectedDistrict('');
+                    setSelectedCity('');
+                    setSelectedSector('');
+                    setSelectedWard('');
+                  }} 
                   className="mt-3 py-1.5 px-3 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-blue-400 hover:text-blue-300 font-bold text-xs rounded-xl transition-all cursor-pointer"
                 >
-                  {t("Clear status filter")}
+                  {t("Reset Filters")}
                 </button>
               </div>
             ) : (
-              reports
-                .filter(matchesStatusFilter)
+              processedReports
                 .map((report) => (
               <div 
                 key={report.id}

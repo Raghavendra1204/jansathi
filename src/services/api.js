@@ -547,7 +547,7 @@ export async function fetchReportById(reportId) {
 /**
  * Creates a new report and appends it to storage.
  */
-export async function createReport(title, category, location, description, imageUrl, reporterName, reporterAvatar = null, priorityScore = 20, severity = 'Low', lat = 12.9716, lng = 77.5946) {
+export async function createReport(title, category, location, description, imageUrl, reporterName, reporterAvatar = null, priorityScore = 20, severity = 'Low', lat = 12.9716, lng = 77.5946, regionState = '', regionDistrict = '', regionCity = '', regionSector = '', regionWard = '') {
   const currentSession = JSON.parse(localStorage.getItem('mock_current_user') || '{}');
   const uid = currentSession.uid || 'unknown_user';
 
@@ -573,7 +573,12 @@ export async function createReport(title, category, location, description, image
       votedUsers: {},
       comments: [],
       lat,
-      lng
+      lng,
+      regionState,
+      regionDistrict,
+      regionCity,
+      regionSector,
+      regionWard
     };
 
     reports.unshift(newReport);
@@ -618,7 +623,12 @@ export async function createReport(title, category, location, description, image
       votedUsers: {},
       comments: [],
       lat,
-      lng
+      lng,
+      regionState,
+      regionDistrict,
+      regionCity,
+      regionSector,
+      regionWard
     };
 
     const docRef = await addDoc(collection(db, 'reports'), newReport);
