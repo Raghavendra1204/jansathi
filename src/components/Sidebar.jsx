@@ -20,9 +20,11 @@ export default function Sidebar() {
   const closeMobileMenu = () => setMobileOpen(false);
 
   const handleLogout = () => {
-    logout();
-    closeMobileMenu();
-    navigate('/login');
+    if (window.confirm("Are you sure you want to log out of Jan Sathi?")) {
+      logout();
+      closeMobileMenu();
+      navigate('/login');
+    }
   };
 
   const loadUnreadCount = async () => {
@@ -98,7 +100,7 @@ export default function Sidebar() {
     <div className="flex flex-col h-full justify-between p-6">
       
       {/* Top Section */}
-      <div className="space-y-6 overflow-y-auto shrink-0 pr-1 scrollbar-thin max-h-[75vh]">
+      <div className="space-y-6 overflow-y-auto flex-1 pr-1 scrollbar-thin">
         
         {/* Branding Logo */}
         <Link to="/" className="flex items-center gap-2.5 group shrink-0" onClick={closeMobileMenu}>
