@@ -3,11 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { Search, MapPin, Calendar, Clock, CheckCircle2, AlertCircle, Loader, X } from 'lucide-react';
 import { fetchMissions, joinMission, logUserActivity } from '../services/api';
 import { useTranslation } from '../context/TranslationContext';
+import { useAuth } from '../hooks/useAuth';
 
 const CATEGORIES = ['All', 'Environment', 'Education', 'Social Help', 'Animal Welfare'];
 
 export default function Explore() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [missions, setMissions] = useState([]);
   const [filteredMissions, setFilteredMissions] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('All');

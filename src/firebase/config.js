@@ -5,7 +5,7 @@ import { getStorage } from 'firebase/storage';
 
 const apiKey = import.meta.env.VITE_FIREBASE_API_KEY;
 // Determine if we should run in mock mode (if keys are blank or placeholders)
-const isMockFirebase = !apiKey || apiKey.includes('YOUR_FIREBASE_API_KEY') || apiKey.trim() === '';
+export let isMockFirebase = !apiKey || apiKey.includes('YOUR_FIREBASE_API_KEY') || apiKey.trim() === '';
 
 let app = null;
 let auth = null;
@@ -32,9 +32,10 @@ if (!isMockFirebase) {
     auth = null;
     db = null;
     storage = null;
+    isMockFirebase = true;
   }
 } else {
   console.warn("Jan Sathi is running in local MOCK FIREBASE mode. Configure real credentials in the .env file to enable live Firestore syncing.");
 }
 
-export { app, auth, db, storage, isMockFirebase };
+export { app, auth, db, storage };
