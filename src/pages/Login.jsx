@@ -173,16 +173,6 @@ export default function Login() {
     try {
       const firebaseUser = await loginWithGoogle();
       
-      if (isMockFirebase) {
-        const role = firebaseUser.role || 'citizen';
-        if (role === 'officer') {
-          navigate('/officer-dashboard');
-        } else {
-          navigate('/citizen-dashboard');
-        }
-        return;
-      }
-
       const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
       if (userDoc.exists()) {
         const profile = userDoc.data();

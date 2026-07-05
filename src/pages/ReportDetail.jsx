@@ -13,6 +13,7 @@ import { formatDate } from '../utils/helpers';
 import { useTranslation } from '../context/TranslationContext';
 import SeverityBadge from '../components/SeverityBadge';
 import { isMockFirebase } from '../firebase/config';
+import { getLocationText } from '../utils/regions';
 
 export default function ReportDetail() {
   const { id } = useParams();
@@ -65,7 +66,7 @@ export default function ReportDetail() {
           setReport(data);
           setEditTitle(data.title);
           setEditCategory(data.category);
-          setEditLocation(data.location && typeof data.location === 'object' ? data.location.address : data.location);
+          setEditLocation(getLocationText(data.location));
           setEditSeverity(data.severity || 'Low');
           setEditDescription(data.description);
         } catch (err) {
@@ -98,7 +99,7 @@ export default function ReportDetail() {
               setReport(data);
               setEditTitle(data.title);
               setEditCategory(data.category);
-              setEditLocation(data.location && typeof data.location === 'object' ? data.location.address : data.location);
+              setEditLocation(getLocationText(data.location));
               setEditSeverity(data.severity || 'Low');
               setEditDescription(data.description);
             } else {
@@ -195,7 +196,7 @@ export default function ReportDetail() {
         });
 
         L.marker([lat, lng], { icon: customIcon }).addTo(mapInstanceRef.current)
-          .bindPopup(`<div class="text-[11px] font-bold text-slate-800">${report.title}</div><div class="text-[9px] text-slate-500">${report.location && typeof report.location === 'object' ? report.location.address : report.location}</div>`)
+          .bindPopup(`<div class="text-[11px] font-bold text-slate-800">${report.title}</div><div class="text-[9px] text-slate-500">${getLocationText(report.location)}</div>`)
           .openPopup();
       } else {
         mapInstanceRef.current.setView([lat, lng], 14);
@@ -473,7 +474,7 @@ export default function ReportDetail() {
             {/* Location Address */}
             <div className="flex items-start gap-2 text-xs text-slate-400 font-semibold pt-4 border-t border-slate-850">
               <MapPin className="w-4 h-4 text-slate-550 shrink-0 mt-0.5" />
-              <span>{t(report.location && typeof report.location === 'object' ? report.location.address : report.location)}</span>
+              <span>{t(getLocationText(report.location))}</span>
             </div>
 
             {/* Voting Section */}

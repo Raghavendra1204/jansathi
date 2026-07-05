@@ -9,7 +9,7 @@ export function useAuth() {
 
   useEffect(() => {
     // --- MODE: MOCK FIREBASE STATE LISTENER ---
-    if (isMockFirebase || !auth) {
+    if (isMockFirebase) {
       const loadMockSession = () => {
         try {
           const session = localStorage.getItem('mock_current_user');

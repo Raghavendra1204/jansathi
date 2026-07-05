@@ -14,6 +14,7 @@ import {
 import { useTranslation } from '../context/TranslationContext';
 import { isMockFirebase } from '../firebase/config';
 import SeverityBadge from '../components/SeverityBadge';
+import { getLocationText } from '../utils/regions';
 
 export default function Profile() {
   const { user, loading, refetchUser } = useAuth();
@@ -998,7 +999,7 @@ export default function Profile() {
                             setEditingReport(report);
                             setEditTitle(report.title);
                             setEditCategory(report.category);
-                            setEditLocation(report.location);
+                            setEditLocation(getLocationText(report.location));
                             setEditSeverity(report.severity || 'Low');
                             setEditDescription(report.description);
                           }}

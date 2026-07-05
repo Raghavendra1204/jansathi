@@ -10,7 +10,7 @@ import { createReport, logUserActivity } from '../services/api';
 import MapSelector from '../components/MapSelector';
 import { useTranslation } from '../context/TranslationContext';
 import SeverityBadge from '../components/SeverityBadge';
-import { REGIONS_DATA, getRegionCoordinates } from '../utils/regions';
+import { REGIONS_DATA, getRegionCoordinates, reverseGeocodeCoords } from '../utils/regions';
 
 const CATEGORIES = ['Infrastructure', 'Roads & Safety', 'Sanitation', 'Public Space', 'Other'];
 
@@ -233,25 +233,51 @@ export default function ReportIssue() {
         }
       }
 
+      // Perform reverse geocoding to build the structured location object
+      let structuredLoc = null;
+      try {
+        structuredLoc = await reverseGeocodeCoords(finalLat, finalLng);
+      } catch (err) {
+        console.error("Reverse geocoding failed during submission:", err);
+      }
+
+      if (!structuredLoc || !structuredLoc.state) {
+        structuredLoc = {
+          country: 'India',
+          state: selectedState || '',
+          district: selectedDistrict || '',
+          city: selectedCity || '',
+          taluka: selectedSector || '',
+          village: '',
+          ward: selectedWard || '',
+          postalCode: '',
+          latitude: finalLat,
+          longitude: finalLng,
+          displayName: location
+        };
+      } else {
+        // Overlay explicit selection if Nominatim leaves fields blank
+        if (selectedState && !structuredLoc.state) structuredLoc.state = selectedState;
+        if (selectedDistrict && !structuredLoc.district) structuredLoc.district = selectedDistrict;
+        if (selectedCity && !structuredLoc.city) structuredLoc.city = selectedCity;
+        if (selectedSector && !structuredLoc.taluka) structuredLoc.taluka = selectedSector;
+        if (selectedWard && !structuredLoc.ward) structuredLoc.ward = selectedWard;
+        // Keep input text address as the displayName
+        structuredLoc.displayName = location || structuredLoc.displayName || '';
+      }
+
       const reporterName = user ? user.name : 'Anonymous Volunteer';
       const reporterAvatar = user ? user.avatar : null;
       await createReport(
         title,
         category,
-        location,
+        structuredLoc,
         description,
         finalImageUrl,
         reporterName,
         reporterAvatar,
         priorityScore,
-        severity,
-        finalLat,
-        finalLng,
-        selectedState,
-        selectedDistrict,
-        selectedCity,
-        selectedSector,
-        selectedWard
+        severity
       );
       if (user) {
         await logUserActivity(user.uid, `Reported Civic Issue: ${title}`, 50, 'Issue Submitted', `Submitted a new civic report titled "${title}"`, 'Completed');

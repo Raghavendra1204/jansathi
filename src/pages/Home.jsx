@@ -13,6 +13,7 @@ import { formatDate, formatCompactNumber } from '../utils/helpers';
 import { useTranslation } from '../context/TranslationContext';
 import SeverityBadge from '../components/SeverityBadge';
 import { isMockFirebase } from '../firebase/config';
+import { getLocationText } from '../utils/regions';
 
 const CATEGORIES = ['Infrastructure', 'Roads & Safety', 'Sanitation', 'Public Space', 'Other'];
 
@@ -572,7 +573,7 @@ export default function Home() {
                         {/* Location Coordinate */}
                         <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-semibold text-left">
                           <MapPin className="w-3.5 h-3.5 text-slate-550" />
-                          <span>{t(report.location)}</span>
+                          <span>{t(getLocationText(report.location))}</span>
                         </div>
                       </div>
 
@@ -638,7 +639,7 @@ export default function Home() {
                                   setEditingReport(report);
                                   setEditTitle(report.title);
                                   setEditCategory(report.category);
-                                  setEditLocation(report.location);
+                                  setEditLocation(getLocationText(report.location));
                                   setEditSeverity(report.severity || 'Low');
                                   setEditDescription(report.description);
                                 }}

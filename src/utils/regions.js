@@ -45,39 +45,143 @@ export const REGIONS_DATA = {
   }
 };
 
-export function getReportRegion(report) {
-  if (!report) return { state: '', district: '', city: '', sector: '', ward: '' };
+export async function reverseGeocodeCoords(lat, lng) {
+  try {
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
+      { headers: { 'Accept-Language': 'en' } }
+    );
+    const data = await response.json();
+    if (data && data.address) {
+      const addr = data.address;
+      return {
+        country: addr.country || '',
+        state: addr.state || '',
+        district: addr.state_district || addr.county || addr.district || '',
+        city: addr.city || addr.town || addr.municipality || '',
+        taluka: addr.taluka || addr.subdistrict || addr.county || '',
+        village: addr.village || addr.hamlet || addr.isolated_dwelling || '',
+        ward: addr.ward || addr.suburb || addr.neighbourhood || '',
+        postalCode: addr.postcode || '',
+        latitude: parseFloat(lat),
+        longitude: parseFloat(lng),
+        displayName: data.display_name || ''
+      };
+    }
+  } catch (err) {
+    console.error("reverseGeocodeCoords failed:", err);
+  }
+  return {
+    country: 'India',
+    state: '',
+    district: '',
+    city: '',
+    taluka: '',
+    village: '',
+    ward: '',
+    postalCode: '',
+    latitude: parseFloat(lat),
+    longitude: parseFloat(lng),
+    displayName: ''
+  };
+}
 
-  // If a structured location object exists
+export async function geocodeAddress(address) {
+  try {
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1&addressdetails=1`,
+      { headers: { 'Accept-Language': 'en' } }
+    );
+    const data = await response.json();
+    if (data && data.length > 0) {
+      const match = data[0];
+      const addr = match.address || {};
+      return {
+        country: addr.country || '',
+        state: addr.state || '',
+        district: addr.state_district || addr.county || addr.district || '',
+        city: addr.city || addr.town || addr.municipality || '',
+        taluka: addr.taluka || addr.subdistrict || addr.county || '',
+        village: addr.village || addr.hamlet || addr.isolated_dwelling || '',
+        ward: addr.ward || addr.suburb || addr.neighbourhood || '',
+        postalCode: addr.postcode || '',
+        latitude: parseFloat(match.lat),
+        longitude: parseFloat(match.lon),
+        displayName: match.display_name || address
+      };
+    }
+  } catch (err) {
+    console.error("geocodeAddress failed:", err);
+  }
+  return null;
+}
+
+export function getReportLocationDetails(report) {
+  if (!report) {
+    return {
+      country: '',
+      state: '',
+      district: '',
+      city: '',
+      taluka: '',
+      village: '',
+      ward: '',
+      postalCode: '',
+      latitude: 0,
+      longitude: 0,
+      displayName: ''
+    };
+  }
+
   if (report.location && typeof report.location === 'object') {
     const loc = report.location;
     return {
+      country: loc.country || '',
       state: loc.state || '',
       district: loc.district || '',
-      city: loc.city || loc.district || '',
-      sector: loc.taluka || '',
-      ward: loc.ward || 'Unknown Ward'
+      city: loc.city || loc.town || loc.municipality || '',
+      taluka: loc.taluka || loc.subdistrict || '',
+      village: loc.village || '',
+      ward: loc.ward || '',
+      postalCode: loc.postalCode || '',
+      latitude: loc.latitude || report.lat || 0,
+      longitude: loc.longitude || report.lng || 0,
+      displayName: loc.displayName || ''
     };
   }
 
-  // Fallback to legacy/flat fields (e.g. if regionState exists on report directly)
-  if (report.regionState) {
-    return {
-      state: report.regionState || '',
-      district: report.regionDistrict || '',
-      city: report.regionCity || '',
-      sector: report.regionSector || '',
-      ward: report.regionWard || 'Unknown Ward'
-    };
-  }
-
-  // If no location structure at all, do NOT assign random values. Return empty/unknown!
+  // Fallback for legacy format (do not assign random wards/states)
   return {
-    state: 'Unknown State',
-    district: 'Unknown District',
-    city: 'Unknown City',
-    sector: 'Unknown Sector',
-    ward: 'Unknown Ward'
+    country: 'India',
+    state: report.regionState || '',
+    district: report.regionDistrict || '',
+    city: report.regionCity || '',
+    taluka: report.regionCity || '',
+    village: '',
+    ward: report.regionWard || '',
+    postalCode: '',
+    latitude: report.lat || 0,
+    longitude: report.lng || 0,
+    displayName: report.location || ''
+  };
+}
+
+export function getLocationText(loc) {
+  if (!loc) return '';
+  if (typeof loc === 'string') return loc;
+  return loc.displayName || loc.city || loc.state || `${loc.latitude.toFixed(4)}, ${loc.longitude.toFixed(4)}`;
+}
+
+export function getReportRegion(report) {
+  if (!report) return { state: '', district: '', city: '', sector: '', ward: '' };
+
+  const details = getReportLocationDetails(report);
+  return {
+    state: details.state || '',
+    district: details.district || '',
+    city: details.city || details.district || '',
+    sector: details.taluka || '',
+    ward: details.ward || ''
   };
 }
 
@@ -103,69 +207,4 @@ export function getRegionCoordinates(state, city) {
     return coordinates[state][city];
   }
   return [20.5937, 78.9629];
-}
-
-export async function reverseGeocode(lat, lng) {
-  try {
-    const response = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
-      { headers: { 'User-Agent': 'JanSathi-App/1.0' } }
-    );
-    if (!response.ok) throw new Error(`HTTP error ${response.status}`);
-    const data = await response.json();
-    
-    if (data && data.address) {
-      const addr = data.address;
-      
-      return {
-        country: addr.country || '',
-        state: addr.state || '',
-        district: addr.state_district || addr.county || addr.district || '',
-        city: addr.city || addr.town || addr.municipality || addr.suburb || '',
-        taluka: addr.county || addr.subdistrict || addr.taluk || '',
-        village: addr.village || addr.neighbourhood || addr.suburb || addr.hamlet || '',
-        ward: addr.ward || '',
-        postalCode: addr.postcode || '',
-        latitude: parseFloat(lat),
-        longitude: parseFloat(lng),
-        address: data.display_name || ''
-      };
-    }
-  } catch (error) {
-    console.error("Reverse geocoding failed:", error);
-  }
-  return null;
-}
-
-export async function geocodeAddress(address) {
-  try {
-    const response = await fetch(
-      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1&addressdetails=1`,
-      { headers: { 'User-Agent': 'JanSathi-App/1.0' } }
-    );
-    if (!response.ok) throw new Error(`HTTP error ${response.status}`);
-    const data = await response.json();
-    
-    if (data && data.length > 0) {
-      const first = data[0];
-      const addr = first.address || {};
-      
-      return {
-        country: addr.country || '',
-        state: addr.state || '',
-        district: addr.state_district || addr.county || addr.district || '',
-        city: addr.city || addr.town || addr.municipality || addr.suburb || '',
-        taluka: addr.county || addr.subdistrict || addr.taluk || '',
-        village: addr.village || addr.neighbourhood || addr.suburb || addr.hamlet || '',
-        ward: addr.ward || '',
-        postalCode: addr.postcode || '',
-        latitude: parseFloat(first.lat),
-        longitude: parseFloat(first.lon),
-        address: first.display_name || address
-      };
-    }
-  } catch (error) {
-    console.error("Geocoding address failed:", error);
-  }
-  return null;
 }

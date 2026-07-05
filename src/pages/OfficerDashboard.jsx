@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { 
@@ -15,8 +15,7 @@ import { useTranslation } from '../context/TranslationContext';
 import SeverityBadge from '../components/SeverityBadge';
 import ExecutiveReportsConsole from '../components/ExecutiveReportsConsole';
 import { officerChatWithGemini, findDuplicateReportsWithGemini, analyzePredictiveRisksWithGemini, generateResourcePlanWithGemini, analyzeModerationWithGemini, localMockModeration, generateAIInsightsWithGemini } from '../services/gemini';
-import { REGIONS_DATA, getReportRegion, getRegionCoordinates } from '../utils/regions';
-import { runLocationDatabaseMigration } from '../utils/locationMigration';
+import { REGIONS_DATA, getReportRegion, getRegionCoordinates, getReportLocationDetails, getLocationText } from '../utils/regions';
 
 // Hardcoded default fallback reports for mock mode
 const INITIAL_MOCK_REPORTS = [
@@ -127,115 +126,6 @@ export default function OfficerDashboard() {
   const [selectedSector, setSelectedSector] = useState('');
   const [selectedWard, setSelectedWard] = useState('');
 
-  const uniqueStates = useMemo(() => {
-    const states = new Set();
-    reports.forEach(r => {
-      const region = getReportRegion(r);
-      if (region.state) states.add(region.state);
-    });
-    return Array.from(states).sort();
-  }, [reports]);
-
-  const uniqueDistricts = useMemo(() => {
-    const districts = new Set();
-    reports.forEach(r => {
-      const region = getReportRegion(r);
-      if (region.state === selectedState && region.district) {
-        districts.add(region.district);
-      }
-    });
-    return Array.from(districts).sort();
-  }, [reports, selectedState]);
-
-  const uniqueCities = useMemo(() => {
-    const cities = new Set();
-    reports.forEach(r => {
-      const region = getReportRegion(r);
-      if (region.state === selectedState && region.district === selectedDistrict && region.city) {
-        cities.add(region.city);
-      }
-    });
-    return Array.from(cities).sort();
-  }, [reports, selectedState, selectedDistrict]);
-
-  const uniqueSectors = useMemo(() => {
-    const sectors = new Set();
-    reports.forEach(r => {
-      const region = getReportRegion(r);
-      if (region.state === selectedState && region.district === selectedDistrict && region.city === selectedCity && region.sector) {
-        sectors.add(region.sector);
-      }
-    });
-    return Array.from(sectors).sort();
-  }, [reports, selectedState, selectedDistrict, selectedCity]);
-
-  const uniqueWards = useMemo(() => {
-    const wards = new Set();
-    reports.forEach(r => {
-      const region = getReportRegion(r);
-      if (region.state === selectedState && region.district === selectedDistrict && region.city === selectedCity && region.sector === selectedSector && region.ward) {
-        wards.add(region.ward);
-      }
-    });
-    return Array.from(wards).sort();
-  }, [reports, selectedState, selectedDistrict, selectedCity, selectedSector]);
-
-  // Auto-run Location Migration on Dashboard mount
-  useEffect(() => {
-    async function migrate() {
-      try {
-        const res = await runLocationDatabaseMigration();
-        if (res && res.migratedCount > 0) {
-          console.log(`[Location Migration] Successfully migrated ${res.migratedCount} reports.`);
-          // Trigger a refresh event so the UI updates
-          window.dispatchEvent(new Event('refresh-reports'));
-        }
-      } catch (err) {
-        console.error("Location migration failed:", err);
-      }
-    }
-    migrate();
-  }, []);
-
-  // Location Mismatch Validation Hook
-  useEffect(() => {
-    if (reports.length === 0) return;
-    
-    const runValidation = async () => {
-      // Validate up to 5 random reports at a time to prevent rate limits or slow loading
-      const samples = reports.filter(r => r.location && typeof r.location === 'object').slice(0, 5);
-      
-      for (const r of samples) {
-        const loc = r.location;
-        if (loc.latitude && loc.longitude) {
-          try {
-            const response = await fetch(
-              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${loc.latitude}&lon=${loc.longitude}&zoom=10&addressdetails=1`,
-              { headers: { 'User-Agent': 'JanSathi-App/1.0' } }
-            );
-            if (response.ok) {
-              const data = await response.json();
-              const addr = data.address || {};
-              const geoState = addr.state || '';
-              const geoCity = addr.city || addr.town || addr.municipality || addr.state_district || '';
-              
-              const stateMatch = !loc.state || !geoState || loc.state.toLowerCase().includes(geoState.toLowerCase()) || geoState.toLowerCase().includes(loc.state.toLowerCase());
-              const cityMatch = !loc.city || !geoCity || loc.city.toLowerCase().includes(geoCity.toLowerCase()) || geoCity.toLowerCase().includes(loc.city.toLowerCase());
-              
-              if (!stateMatch || !cityMatch) {
-                console.warn(`Location mismatch detected for report "${r.title}" (ID: ${r.id}). Stored: State=${loc.state}, City=${loc.city}. Reverse Geocoded: State=${geoState}, City=${geoCity}`);
-              }
-            }
-          } catch (err) {
-            console.error("Validation geocoding check failed:", err);
-          }
-        }
-      }
-    };
-    
-    runValidation();
-  }, [reports]);
-
   useEffect(() => {
     if (window.L) {
       setMapLoading(false);
@@ -316,7 +206,7 @@ export default function OfficerDashboard() {
     return reports.filter(r => {
       const matchesSearch = r.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
                             r.description.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                            (r.location && typeof r.location === 'object' ? r.location.address : r.location).toLowerCase().includes(searchTerm.toLowerCase()) ||
+                            r.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
                             r.id.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesStatus = statusFilter === 'All' || r.status === statusFilter;
       const matchesCategory = categoryFilter === 'All' || r.category === categoryFilter;
@@ -340,6 +230,36 @@ export default function OfficerDashboard() {
       return matchesSearch && matchesStatus && matchesCategory && matchesSeverity && matchesAssigned && matchesDate && matchesState && matchesDistrict && matchesCity && matchesSector && matchesWard;
     });
   }, [reports, searchTerm, statusFilter, categoryFilter, severityFilter, assignedMeFilter, dateRange, user, selectedState, selectedDistrict, selectedCity, selectedSector, selectedWard]);
+  // Background coordinates validation for analytics debugging
+  useEffect(() => {
+    if (activeTab === 'analytics') {
+      reports.forEach(async (r) => {
+        const details = getReportLocationDetails(r);
+        if (details.latitude && details.longitude && details.state) {
+          try {
+            // Reverse geocode to check for mismatches
+            const response = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${details.latitude}&lon=${details.longitude}&zoom=18&addressdetails=1`,
+              { headers: { 'Accept-Language': 'en' } }
+            );
+            const data = await response.json();
+            if (data && data.address) {
+              const geoState = data.address.state || '';
+              const geoCity = data.address.city || data.address.town || data.address.municipality || '';
+              if (
+                (geoState && details.state && geoState.toLowerCase() !== details.state.toLowerCase()) ||
+                (geoCity && details.city && geoCity.toLowerCase() !== details.city.toLowerCase())
+              ) {
+                console.warn(`Location mismatch detected for report ${r.id}: Stored State/City [${details.state}/${details.city}] does not match reverse geocoded coordinates State/City [${geoState}/${geoCity}]`);
+              }
+            }
+          } catch (err) {
+            // Ignore Nominatim errors for debug validation
+          }
+        }
+      });
+    }
+  }, [activeTab, reports]);
 
   // Officer Actions State
   const [actionDept, setActionDept] = useState('');
@@ -1051,7 +971,7 @@ export default function OfficerDashboard() {
     if (foundCluster) {
       setCrisisAlert({
         name: `Cluster Alert: Sanitation & Infrastructure Outage`,
-        affectedArea: `${(typeof foundCluster[0].location === 'object' ? foundCluster[0].location.address : foundCluster[0].location).split(',')[1] || 'Central Area'} Zone`,
+        affectedArea: `${foundCluster[0].location.split(',')[1] || 'Central Area'} Zone`,
         severity: 'Critical',
         confidence: 94,
         reportsCount: foundCluster.length,
@@ -1542,7 +1462,7 @@ export default function OfficerDashboard() {
                   className="w-full px-3 py-2 bg-slate-950/80 border border-slate-850/80 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-blue-600 transition-colors cursor-pointer font-semibold"
                 >
                   <option value="">{t("All States")}</option>
-                  {uniqueStates.map(st => (
+                  {Object.keys(REGIONS_DATA).map(st => (
                     <option key={st} value={st}>{t(st)}</option>
                   ))}
                 </select>
@@ -1563,7 +1483,7 @@ export default function OfficerDashboard() {
                   className="w-full px-3 py-2 bg-slate-950/80 border border-slate-850/80 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-blue-600 transition-colors cursor-pointer font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <option value="">{t("All Districts")}</option>
-                  {uniqueDistricts.map(dist => (
+                  {selectedState && Object.keys(REGIONS_DATA[selectedState]).map(dist => (
                     <option key={dist} value={dist}>{t(dist)}</option>
                   ))}
                 </select>
@@ -1583,7 +1503,7 @@ export default function OfficerDashboard() {
                   className="w-full px-3 py-2 bg-slate-950/80 border border-slate-850/80 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-blue-600 transition-colors cursor-pointer font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <option value="">{t("All Cities")}</option>
-                  {uniqueCities.map(ct => (
+                  {selectedState && selectedDistrict && Object.keys(REGIONS_DATA[selectedState][selectedDistrict]).map(ct => (
                     <option key={ct} value={ct}>{t(ct)}</option>
                   ))}
                 </select>
@@ -1602,7 +1522,7 @@ export default function OfficerDashboard() {
                   className="w-full px-3 py-2 bg-slate-950/80 border border-slate-850/80 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-blue-600 transition-colors cursor-pointer font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <option value="">{t("All Sectors")}</option>
-                  {uniqueSectors.map(sec => (
+                  {selectedState && selectedDistrict && selectedCity && Object.keys(REGIONS_DATA[selectedState][selectedDistrict][selectedCity]).map(sec => (
                     <option key={sec} value={sec}>{t(sec)}</option>
                   ))}
                 </select>
@@ -1618,7 +1538,7 @@ export default function OfficerDashboard() {
                   className="w-full px-3 py-2 bg-slate-950/80 border border-slate-850/80 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-blue-600 transition-colors cursor-pointer font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <option value="">{t("All Wards")}</option>
-                  {uniqueWards.map(wd => (
+                  {selectedState && selectedDistrict && selectedCity && selectedSector && REGIONS_DATA[selectedState][selectedDistrict][selectedCity][selectedSector].map(wd => (
                     <option key={wd} value={wd}>{t(wd)}</option>
                   ))}
                 </select>
@@ -2039,7 +1959,7 @@ export default function OfficerDashboard() {
                         <MapPin className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
                         <div>
                           <h4 className="font-bold text-slate-200 text-sm">{t("Incident Location Address")}</h4>
-                          <p className="text-slate-400 text-xs mt-1 leading-normal">{t(selectedReport.location && typeof selectedReport.location === 'object' ? selectedReport.location.address : selectedReport.location)}</p>
+                          <p className="text-slate-400 text-xs mt-1 leading-normal">{t(getLocationText(selectedReport.location))}</p>
                         </div>
                       </div>
 
@@ -2657,22 +2577,20 @@ export default function OfficerDashboard() {
 
         // 4. WARD STATISTICS SUB-VIEW
         if (viewParam === 'wards') {
-          // Extract unique active places from the reports database based on structured location object
+          // Extract unique active places from the reports database
           const activePlacesMap = {};
           reports.forEach(r => {
-            const region = getReportRegion(r);
-            const state = region.state || 'Unknown State';
-            const district = region.district || 'Unknown District';
-            const cityOrDistrict = region.city || region.district || 'Unknown City/District';
-            const taluka = region.sector || 'Unknown Taluka';
-            const ward = region.ward || 'Unknown Ward';
+            const loc = getReportLocationDetails(r);
+            const state = loc.state || 'Unknown State';
+            const city = loc.city || loc.district || 'Unknown City/District';
+            const taluka = loc.taluka || '';
+            const ward = loc.ward || 'Unknown Ward';
             
-            const key = `${state} | ${district} | ${cityOrDistrict} | ${taluka} | ${ward}`;
+            const key = `${state} | ${city} | ${taluka} | ${ward}`;
             if (!activePlacesMap[key]) {
               activePlacesMap[key] = {
                 state,
-                district,
-                cityOrDistrict,
+                city,
                 taluka,
                 ward,
                 matches: []
@@ -2684,15 +2602,14 @@ export default function OfficerDashboard() {
           // Convert to array and calculate statistics
           const placeStats = Object.values(activePlacesMap).map(place => {
             const matches = place.matches;
-            const pending = matches.filter(r => r.status === 'Pending' || r.status === 'Submitted' || r.status === 'Resources Assigned' || r.status === 'Assigned' || r.status === 'In Progress').length;
+            const pending = matches.filter(r => r.status === 'Pending' || r.status === 'Submitted' || r.status === 'Resources Assigned').length;
             const progress = matches.filter(r => r.status === 'In Progress').length;
             const resolved = matches.filter(r => r.status === 'Resolved').length;
             const critical = matches.filter(r => r.severity === 'Critical').length;
 
             return {
               state: place.state,
-              district: place.district,
-              cityOrDistrict: place.cityOrDistrict,
+              city: place.city,
               taluka: place.taluka,
               ward: place.ward,
               total: matches.length,
@@ -2703,7 +2620,7 @@ export default function OfficerDashboard() {
             };
           });
 
-          // Sort places so that most active areas are first
+          // Sort places so that most active wards are first
           placeStats.sort((a, b) => b.total - a.total);
 
           return (
@@ -2718,9 +2635,8 @@ export default function OfficerDashboard() {
                   <table className="w-full text-xs text-left border-collapse">
                     <thead>
                       <tr className="border-b border-slate-850 text-slate-500 text-[9px] font-black uppercase tracking-widest pb-3">
-                        <th className="py-3 px-4">{t("State")}</th>
-                        <th className="py-3 px-4">{t("District")}</th>
-                        <th className="py-3 px-4">{t("City / Taluka")}</th>
+                        <th className="py-3 px-4">{t("State / City")}</th>
+                        <th className="py-3 px-4">{t("Sector / Zone (Taluka)")}</th>
                         <th className="py-3 px-4">{t("Ward")}</th>
                         <th className="py-3 px-4">{t("Total Reports")}</th>
                         <th className="py-3 px-4">{t("Pending Action")}</th>
@@ -2732,14 +2648,13 @@ export default function OfficerDashboard() {
                     <tbody className="divide-y divide-slate-850/50">
                       {placeStats.length === 0 ? (
                         <tr>
-                          <td colSpan="9" className="py-8 text-center text-slate-550 font-bold">{t("No active issues registered in any region yet.")}</td>
+                          <td colSpan="8" className="py-8 text-center text-slate-550 font-bold">{t("No active issues registered in any region yet.")}</td>
                         </tr>
                       ) : (
                         placeStats.map((place, idx) => (
                           <tr key={idx} className="hover:bg-slate-900/10 transition-colors">
-                            <td className="py-4 px-4 font-bold text-slate-300">{place.state}</td>
-                            <td className="py-4 px-4 text-slate-400 font-semibold">{place.district}</td>
-                            <td className="py-4 px-4 text-slate-350 font-semibold">{place.taluka && place.taluka !== 'Unknown Taluka' ? place.taluka : place.cityOrDistrict}</td>
+                            <td className="py-4 px-4 font-bold text-slate-400">{place.state} → {place.city}</td>
+                            <td className="py-4 px-4 text-slate-350 font-semibold">{place.taluka || '-'}</td>
                             <td className="py-4 px-4 font-black text-white">{place.ward}</td>
                             <td className="py-4 px-4 font-bold text-slate-300">{place.total}</td>
                             <td className="py-4 px-4"><span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold">{place.pending}</span></td>
@@ -3164,7 +3079,7 @@ export default function OfficerDashboard() {
                               
                               {/* Metadata grid */}
                               <div className="grid grid-cols-2 gap-2 text-[9px] text-slate-500 pt-2 border-t border-slate-900">
-                                <div>Location: <span className="font-bold text-slate-300 block truncate">{rep.location && typeof rep.location === 'object' ? rep.location.address : rep.location}</span></div>
+                                <div>Location: <span className="font-bold text-slate-300 block truncate">{getLocationText(rep.location)}</span></div>
                                 <div>Category: <span className="font-bold text-slate-300 block">{rep.category}</span></div>
                                 <div>Reporter: <span className="font-bold text-slate-350 block">{rep.reporterName}</span></div>
                                 <div>Date: <span className="font-bold text-slate-350 block">{rep.date}</span></div>
@@ -3290,7 +3205,7 @@ export default function OfficerDashboard() {
                               <div className="flex flex-wrap items-start justify-between gap-2">
                                 <div>
                                   <h4 className="text-xs font-black text-white uppercase tracking-wider">{rep.title}</h4>
-                                  <span className="text-[10px] text-slate-500 font-bold block">{rep.location && typeof rep.location === 'object' ? rep.location.address : rep.location}</span>
+                                  <span className="text-[10px] text-slate-500 font-bold block">{getLocationText(rep.location)}</span>
                                 </div>
                                 <span className="text-[9px] bg-slate-900 border border-slate-850 px-2 py-0.5 rounded text-slate-400 font-bold">
                                   {rep.category}
@@ -3441,7 +3356,7 @@ export default function OfficerDashboard() {
                 <div className="flex-1 overflow-y-auto space-y-2 pr-1 scrollbar-thin">
                   {reports
                     .filter(r => {
-                      const matchesSearch = r.title.toLowerCase().includes(searchTerm.toLowerCase()) || (r.location && typeof r.location === 'object' ? r.location.address : r.location).toLowerCase().includes(searchTerm.toLowerCase());
+                      const matchesSearch = r.title.toLowerCase().includes(searchTerm.toLowerCase()) || r.location.toLowerCase().includes(searchTerm.toLowerCase());
                       
                       let matchesFilter = false;
                       const isCritical = r.severity === 'Critical' || (r.priorityScore && r.priorityScore >= 75);
@@ -3497,7 +3412,7 @@ export default function OfficerDashboard() {
                               {rep.severity}
                             </span>
                           </div>
-                          <p className="text-[9px] text-slate-400 dark:text-slate-500 mt-1 block truncate">{rep.location && typeof rep.location === 'object' ? rep.location.address : rep.location}</p>
+                          <p className="text-[9px] text-slate-400 dark:text-slate-500 mt-1 block truncate">{getLocationText(rep.location)}</p>
                           <div className="flex justify-between items-center mt-2 text-[8px] font-semibold text-slate-450 uppercase pt-1 border-t border-slate-200 dark:border-slate-900">
                             <span>{rep.category}</span>
                             <span className={`font-black ${rep.status === 'Resolved' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500'}`}>{rep.status}</span>
@@ -3531,7 +3446,7 @@ export default function OfficerDashboard() {
                       <div>
                         <span className="text-[9px] text-blue-600 dark:text-blue-400 font-bold uppercase tracking-wider block">{plannerSelectedReport.category}</span>
                         <h4 className="text-sm font-black text-slate-800 dark:text-white uppercase tracking-wider mt-0.5">{plannerSelectedReport.title}</h4>
-                        <span className="text-[10px] text-slate-400 dark:text-slate-450 font-semibold block">{plannerSelectedReport.location && typeof plannerSelectedReport.location === 'object' ? plannerSelectedReport.location.address : plannerSelectedReport.location}</span>
+                        <span className="text-[10px] text-slate-400 dark:text-slate-450 font-semibold block">{getLocationText(plannerSelectedReport.location)}</span>
                       </div>
 
                       {plannerReportPlan ? (

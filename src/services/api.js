@@ -12,6 +12,7 @@ import {
   arrayUnion 
 } from 'firebase/firestore';
 import { db, isMockFirebase } from '../firebase/config';
+import { reverseGeocodeCoords, geocodeAddress } from '../utils/regions';
 
 // API services for Jan Sathi database
 
@@ -551,23 +552,20 @@ export async function createReport(title, category, location, description, image
   const currentSession = JSON.parse(localStorage.getItem('mock_current_user') || '{}');
   const uid = currentSession.uid || 'unknown_user';
 
-  // Construct structured location object
-  let structuredLocation = null;
-  if (location && typeof location === 'object') {
-    structuredLocation = location;
-  } else {
-    structuredLocation = {
+  let structuredLoc = location;
+  if (!structuredLoc || typeof structuredLoc !== 'object') {
+    structuredLoc = {
       country: 'India',
-      state: regionState || 'Karnataka',
-      district: regionDistrict || 'Bengaluru Urban',
-      city: regionCity || 'Bengaluru',
-      taluka: regionSector || 'East Sector',
+      state: regionState || '',
+      district: regionDistrict || '',
+      city: regionCity || '',
+      taluka: regionSector || '',
       village: '',
-      ward: regionWard || 'Unknown Ward',
+      ward: regionWard || '',
       postalCode: '',
-      latitude: parseFloat(lat) || 12.9716,
-      longitude: parseFloat(lng) || 77.5946,
-      address: location || 'Unknown Address'
+      latitude: lat || 12.9716,
+      longitude: lng || 77.5946,
+      displayName: typeof location === 'string' ? location : 'Unknown Location'
     };
   }
 
@@ -579,7 +577,7 @@ export async function createReport(title, category, location, description, image
       userId: uid,
       title,
       category,
-      location: structuredLocation,
+      location: structuredLoc,
       date: new Date().toISOString().split('T')[0],
       reporterName,
       reporterAvatar: reporterAvatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150',
@@ -592,13 +590,13 @@ export async function createReport(title, category, location, description, image
       status: 'Pending',
       votedUsers: {},
       comments: [],
-      lat: structuredLocation.latitude,
-      lng: structuredLocation.longitude,
-      regionState: structuredLocation.state,
-      regionDistrict: structuredLocation.district,
-      regionCity: structuredLocation.city,
-      regionSector: structuredLocation.taluka,
-      regionWard: structuredLocation.ward
+      lat: structuredLoc.latitude,
+      lng: structuredLoc.longitude,
+      regionState: structuredLoc.state,
+      regionDistrict: structuredLoc.district,
+      regionCity: structuredLoc.city,
+      regionSector: structuredLoc.taluka,
+      regionWard: structuredLoc.ward
     };
 
     reports.unshift(newReport);
@@ -629,7 +627,7 @@ export async function createReport(title, category, location, description, image
       userId: auth.currentUser?.uid || uid,
       title,
       category,
-      location: structuredLocation,
+      location: structuredLoc,
       date: new Date().toISOString().split('T')[0],
       reporterName,
       reporterAvatar: reporterAvatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150',
@@ -642,13 +640,13 @@ export async function createReport(title, category, location, description, image
       status: 'Pending',
       votedUsers: {},
       comments: [],
-      lat: structuredLocation.latitude,
-      lng: structuredLocation.longitude,
-      regionState: structuredLocation.state,
-      regionDistrict: structuredLocation.district,
-      regionCity: structuredLocation.city,
-      regionSector: structuredLocation.taluka,
-      regionWard: structuredLocation.ward
+      lat: structuredLoc.latitude,
+      lng: structuredLoc.longitude,
+      regionState: structuredLoc.state,
+      regionDistrict: structuredLoc.district,
+      regionCity: structuredLoc.city,
+      regionSector: structuredLoc.taluka,
+      regionWard: structuredLoc.ward
     };
 
     const docRef = await addDoc(collection(db, 'reports'), newReport);
@@ -1688,6 +1686,98 @@ export async function updateTeam(teamId, updateData) {
     return { success: true };
   } catch (error) {
     console.error("Error updating team in Firestore:", error);
+    throw error;
+  }
+}
+
+export async function runLocationMigration() {
+  console.log("Starting location migration...");
+  
+  if (isMockFirebase) {
+    const reports = getStoredReports();
+    let updatedCount = 0;
+    
+    for (let i = 0; i < reports.length; i++) {
+      const r = reports[i];
+      // Check if location is already a structured object
+      if (r.location && typeof r.location === 'object' && r.location.state) {
+        continue;
+      }
+      
+      console.log(`Migrating mock report: ${r.title}`);
+      let structuredLoc = null;
+      
+      if (r.lat && r.lng) {
+        structuredLoc = await reverseGeocodeCoords(r.lat, r.lng);
+      } else if (r.location && typeof r.location === 'string') {
+        structuredLoc = await geocodeAddress(r.location);
+      }
+      
+      if (structuredLoc) {
+        structuredLoc.displayName = typeof r.location === 'string' ? r.location : (structuredLoc.displayName || '');
+        r.location = structuredLoc;
+        // Keep legacy parameters synchronized
+        r.regionState = structuredLoc.state;
+        r.regionDistrict = structuredLoc.district;
+        r.regionCity = structuredLoc.city;
+        r.regionSector = structuredLoc.taluka;
+        r.regionWard = structuredLoc.ward;
+        updatedCount++;
+        // Throttling to respect Nominatim policy
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+    
+    if (updatedCount > 0) {
+      saveStoredReports(reports);
+      console.log(`Successfully migrated ${updatedCount} mock reports.`);
+    } else {
+      console.log("No mock reports needed migration.");
+    }
+    return { success: true, migrated: updatedCount };
+  }
+
+  // Firestore migration
+  try {
+    const querySnapshot = await getDocs(collection(db, 'reports'));
+    let updatedCount = 0;
+    
+    for (const docSnap of querySnapshot.docs) {
+      const r = docSnap.data();
+      // Check if location is already a structured object
+      if (r.location && typeof r.location === 'object' && r.location.state) {
+        continue;
+      }
+      
+      console.log(`Migrating Firestore report: ${r.title} (ID: ${docSnap.id})`);
+      let structuredLoc = null;
+      
+      if (r.lat && r.lng) {
+        structuredLoc = await reverseGeocodeCoords(r.lat, r.lng);
+      } else if (r.location && typeof r.location === 'string') {
+        structuredLoc = await geocodeAddress(r.location);
+      }
+      
+      if (structuredLoc) {
+        structuredLoc.displayName = typeof r.location === 'string' ? r.location : (structuredLoc.displayName || '');
+        await updateDoc(doc(db, 'reports', docSnap.id), {
+          location: structuredLoc,
+          regionState: structuredLoc.state,
+          regionDistrict: structuredLoc.district,
+          regionCity: structuredLoc.city,
+          regionSector: structuredLoc.taluka,
+          regionWard: structuredLoc.ward
+        });
+        updatedCount++;
+        // Throttling to respect Nominatim policy
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+    
+    console.log(`Successfully migrated ${updatedCount} Firestore reports.`);
+    return { success: true, migrated: updatedCount };
+  } catch (error) {
+    console.error("Firestore location migration failed:", error);
     throw error;
   }
 }

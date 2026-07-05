@@ -16,6 +16,7 @@ import Chatbot from './components/Chatbot';
 import NotificationDrawer from './components/NotificationDrawer';
 import XPToast from './components/XPToast';
 import { TranslationProvider } from './context/TranslationContext';
+import { runLocationMigration } from './services/api';
 
 export default function App() {
   const { user } = useAuth();
@@ -53,6 +54,15 @@ export default function App() {
 
   useEffect(() => {
     syncTheme();
+    // Auto-trigger location migration to structured schema once
+    const migrated = localStorage.getItem('jan_sathi_location_migrated_v1');
+    if (!migrated) {
+      runLocationMigration().then(() => {
+        localStorage.setItem('jan_sathi_location_migrated_v1', 'true');
+      }).catch(err => {
+        console.error("Location migration failed:", err);
+      });
+    }
     window.addEventListener('mock-auth-state-change', syncTheme);
     window.addEventListener('open-notifications-panel', () => setNotificationsOpen(true));
     

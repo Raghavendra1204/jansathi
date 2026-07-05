@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { getReportRegion } from '../utils/regions';
+import { getReportRegion, getReportLocationDetails, getLocationText } from '../utils/regions';
 
 const geminiApiKey = import.meta.env.VITE_GEMINI_API_KEY;
 const isMockGemini = !geminiApiKey || geminiApiKey.includes('YOUR_GEMINI_API_KEY') || geminiApiKey.trim() === '';
@@ -233,7 +233,7 @@ Keep your answers brief, analytical, and professional.`
         status: r.status,
         severity: r.severity,
         priorityScore: r.priorityScore,
-        location: r.location,
+        location: getLocationText(r.location),
         state: region.state || '',
         district: region.district || '',
         city: region.city || '',

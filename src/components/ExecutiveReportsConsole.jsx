@@ -8,6 +8,7 @@ import {
 import { useTranslation } from '../context/TranslationContext';
 import { generateExecutiveReportWithGemini } from '../services/gemini';
 import { fetchTopHeroes, fetchMissions } from '../services/api';
+import { getLocationText } from '../utils/regions';
 
 export default function ExecutiveReportsConsole({ reports = [], user = {} }) {
   const { t } = useTranslation();
@@ -89,7 +90,7 @@ export default function ExecutiveReportsConsole({ reports = [], user = {} }) {
         if (dept !== selectedDept) matches = false;
       }
       if (selectedWard !== 'All') {
-        const loc = r.location || '';
+        const loc = getLocationText(r.location) || '';
         if (selectedWard === 'Ward 12 (Delhi Cantonment)' && !loc.includes('Ward 12') && !loc.includes('Cantonment')) matches = false;
         else if (selectedWard === 'Ward 5 (Downtown)' && !loc.includes('Pine Street') && !loc.includes('Downtown')) matches = false;
         else if (selectedWard === 'Ward 8 (Broadway)' && !loc.includes('Broadway')) matches = false;
@@ -166,7 +167,7 @@ export default function ExecutiveReportsConsole({ reports = [], user = {} }) {
 
     const wardBreakdown = {};
     filtered.forEach(r => {
-      const loc = r.location || '';
+      const loc = getLocationText(r.location) || '';
       let ward = t('General Ward');
       if (loc.includes('Ward 12') || loc.includes('Cantonment')) ward = 'Ward 12 (Delhi Cantonment)';
       else if (loc.includes('Pine Street') || loc.includes('Downtown')) ward = 'Ward 5 (Downtown)';
@@ -219,7 +220,7 @@ export default function ExecutiveReportsConsole({ reports = [], user = {} }) {
       } else if (reportTypeObj.id === 'ward-zone') {
         const targetWard = selectedReportWard || uniqueWards[0];
         const wardFiltered = filtered.filter(r => {
-          const loc = r.location || '';
+          const loc = getLocationText(r.location) || '';
           if (targetWard === 'Ward 12 (Delhi Cantonment)') return loc.includes('Ward 12') || loc.includes('Cantonment');
           if (targetWard === 'Ward 5 (Downtown)') return loc.includes('Pine Street') || loc.includes('Downtown');
           if (targetWard === 'Ward 8 (Broadway)') return loc.includes('Broadway');
@@ -244,7 +245,7 @@ export default function ExecutiveReportsConsole({ reports = [], user = {} }) {
         };
       } else if (reportTypeObj.id === 'area-intelligence') {
         const targetLocation = selectedLocationInput || 'Mohan Enclave';
-        const locationFiltered = reports.filter(r => r.location?.toLowerCase().includes(targetLocation.toLowerCase()));
+        const locationFiltered = reports.filter(r => getLocationText(r.location).toLowerCase().includes(targetLocation.toLowerCase()));
         dataSummary = {
           locationName: targetLocation,
           history: locationFiltered.map(r => ({ id: r.id, title: r.title, status: r.status, severity: r.severity })),
@@ -696,7 +697,7 @@ export default function ExecutiveReportsConsole({ reports = [], user = {} }) {
                       <div className="grid grid-cols-2 gap-4">
                         <div><strong>{t("Title")}:</strong> {activeReport.data.incidentDetails.title}</div>
                         <div><strong>{t("Category")}:</strong> {activeReport.data.incidentDetails.category}</div>
-                        <div><strong>{t("Location")}:</strong> {activeReport.data.incidentDetails.location}</div>
+                        <div><strong>{t("Location")}:</strong> {getLocationText(activeReport.data.incidentDetails.location)}</div>
                         <div><strong>{t("Severity")}:</strong> {activeReport.data.incidentDetails.severity}</div>
                         <div><strong>{t("Date Filed")}:</strong> {activeReport.data.incidentDetails.date}</div>
                         <div><strong>{t("Risk Score")}:</strong> {activeReport.data.incidentDetails.priorityScore}</div>
