@@ -2660,12 +2660,12 @@ export default function OfficerDashboard() {
           // Extract unique active places from the reports database based on structured location object
           const activePlacesMap = {};
           reports.forEach(r => {
-            const loc = r.location || {};
-            const state = loc.state || 'Unknown State';
-            const district = loc.district || 'Unknown District';
-            const cityOrDistrict = loc.city || loc.district || 'Unknown City/District';
-            const taluka = loc.taluka || 'Unknown Taluka';
-            const ward = loc.ward || 'Unknown Ward';
+            const region = getReportRegion(r);
+            const state = region.state || 'Unknown State';
+            const district = region.district || 'Unknown District';
+            const cityOrDistrict = region.city || region.district || 'Unknown City/District';
+            const taluka = region.sector || 'Unknown Taluka';
+            const ward = region.ward || 'Unknown Ward';
             
             const key = `${state} | ${district} | ${cityOrDistrict} | ${taluka} | ${ward}`;
             if (!activePlacesMap[key]) {
