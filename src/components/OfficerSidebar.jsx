@@ -296,7 +296,6 @@ export default function OfficerSidebar() {
             </button>
             {expandedSections.analytics && (
               <div className="space-y-0.5 pl-1.5 animate-fade-in">
-                {renderLink('/officer-dashboard?tab=analytics&view=performance', 'Performance Dash', BarChart3)}
                 {renderLink('/officer-dashboard?tab=analytics&view=depts', 'Dept Analytics', BarChart3)}
                 {renderLink('/officer-dashboard?tab=analytics&view=citizens', 'Citizen Participation', Users)}
                 {renderLink('/officer-dashboard?tab=analytics&view=wards', 'Ward Statistics', BarChart3)}

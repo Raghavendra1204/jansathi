@@ -105,7 +105,7 @@ export default function OfficerDashboard() {
   const filterParam = searchParams.get('filter');
   const deptParam = searchParams.get('dept');
   const subParam = searchParams.get('sub');
-  const viewParam = searchParams.get('view') || 'performance';
+  const viewParam = searchParams.get('view') || 'depts';
 
   // Tab State: 'command-center' | 'queue' | 'agents' | 'analytics' | 'profile' | 'verification'
   const [activeTab, setActiveTab] = useState(tabParam || 'command-center');
@@ -2361,79 +2361,6 @@ export default function OfficerDashboard() {
 
       {/* --- TAB VIEW 4: ANALYTICS DASHBOARD --- */}
       {activeTab === 'analytics' && (() => {
-        // 1. PERFORMANCE DASH SUB-VIEW
-        if (viewParam === 'performance') {
-          const myLogs = activityLogs.filter(log => log.userId === user.uid);
-          const solvedCount = reports.filter(r => r.status === 'Resolved' && r.assignedDepartment === user.department).length;
-          
-          return (
-            <div className="space-y-8 animate-fade-in text-left">
-              <div className="border-b border-slate-800/60 pb-3">
-                <h2 className="text-lg font-black text-white tracking-tight uppercase">{t("Officer Performance & Logs")}</h2>
-                <p className="text-slate-455 text-xs mt-0.5">{t("Personal SLA scorecard and operational audit logs connected from Firestore.")}</p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Scorecard */}
-                <div className="glass p-6 rounded-3xl border border-slate-800/60 text-left space-y-4 md:col-span-1">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-brand-300 block">{t("Officer Scorecard")}</span>
-                  
-                  <div className="flex flex-col items-center text-center py-4 space-y-2">
-                    <img
-                      src={user.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150'}
-                      alt={user.name}
-                      className="w-20 h-20 rounded-full object-cover border-2 border-brand-500/20 shadow-xl"
-                    />
-                    <div>
-                      <h3 className="font-extrabold text-white text-base leading-snug">{user.name}</h3>
-                      <span className="text-[10px] text-brand-300 font-semibold tracking-wider uppercase block">{t(user.role)}</span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3.5 border-t border-slate-850 pt-4 text-xs">
-                    <div className="flex justify-between text-slate-400">
-                      <span>Employee ID:</span>
-                      <span className="text-white font-semibold">JS-OFF-7089</span>
-                    </div>
-                    <div className="flex justify-between text-slate-400">
-                      <span>Division:</span>
-                      <span className="text-white font-semibold">{t(user.department || "Operations Control")}</span>
-                    </div>
-                    <div className="flex justify-between text-slate-400">
-                      <span>Shift Status:</span>
-                      <span className="text-emerald-400 font-bold">Active On Duty</span>
-                    </div>
-                    <div className="flex justify-between text-slate-400">
-                      <span>Department Resolved:</span>
-                      <span className="text-brand-300 font-extrabold">{solvedCount} {t("issues")}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Audit Logs */}
-                <div className="glass p-6 rounded-3xl border border-slate-800/60 text-left space-y-4 md:col-span-2 flex flex-col justify-between max-h-[420px]">
-                  <div>
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-455 block mb-3">{t("Dispatcher Activity Log")}</span>
-                    <div className="space-y-4 overflow-y-auto max-h-[320px] pr-1.5 scrollbar-thin">
-                      {myLogs.length === 0 ? (
-                        <div className="py-16 text-center text-slate-500 italic">
-                          {t("No activity logs registered under your profile yet.")}
-                        </div>
-                      ) : (
-                        myLogs.map((log, idx) => (
-                          <div key={idx} className="flex gap-4 text-xs font-semibold leading-relaxed border-b border-slate-850/30 pb-2.5">
-                            <span className="text-slate-500 shrink-0 text-[10px] font-bold w-28">{log.timestamp}</span>
-                            <span className="text-slate-300">{log.action || log.details}</span>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
-        }
 
         // 2. DEPT ANALYTICS SUB-VIEW
         if (viewParam === 'depts') {
@@ -2740,6 +2667,11 @@ export default function OfficerDashboard() {
       {activeTab === 'profile' && (
         <div className="space-y-8 animate-fade-in text-left">
           
+          <div className="border-b border-slate-800/60 pb-3">
+            <h2 className="text-lg font-black text-white tracking-tight uppercase">{t("Officer Profile & Audit Logs")}</h2>
+            <p className="text-slate-455 text-xs mt-0.5">{t("Personal SLA scorecard and dispatcher audit logs connected from Firestore.")}</p>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             
             {/* Officer Details Card */}
@@ -2772,30 +2704,32 @@ export default function OfficerDashboard() {
                   <span className="text-emerald-400 font-bold">Active On Duty</span>
                 </div>
                 <div className="flex justify-between text-slate-400">
-                  <span>Resolution Score:</span>
-                  <span className="text-brand-300 font-extrabold">98.5% SLA Match</span>
+                  <span>Department Resolved:</span>
+                  <span className="text-brand-300 font-extrabold">{reports.filter(r => r.status === 'Resolved' && r.assignedDepartment === user.department).length} {t("issues")}</span>
                 </div>
               </div>
             </div>
 
             {/* Officer Recent Activity Log */}
-            <div className="glass p-6 rounded-3xl border border-slate-800/60 text-left space-y-4 md:col-span-2">
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-450 block">{t("Dispatcher Activity Log")}</span>
-              
-              <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1 scrollbar-thin">
-                {[
-                  { time: 'Just now', action: 'Declined merging for duplicate issues #rep-101 and #rep-102.' },
-                  { time: '34 Minutes ago', action: `Dispatched sanitation crew to Indiranagar for reported garbage pile.` },
-                  { time: '2 Hours ago', action: 'Updated display theme parameters to light mode preference.' },
-                  { time: 'Yesterday', action: 'Assigned roads and safety crew to Broadway Avenue pothole repairs.' },
-                  { time: '2 Days ago', action: 'Authorized 50 Community Points release to reporter Sara Jenkins.' }
-                ].map((log, idx) => (
-                  <div key={idx} className="flex gap-4 text-xs font-semibold leading-relaxed">
-                    <span className="text-slate-500 shrink-0 text-[10px] font-bold w-24">{log.time}</span>
-                    <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0 mt-1.5" />
-                    <span className="text-slate-300 font-medium">{log.action}</span>
-                  </div>
-                ))}
+            <div className="glass p-6 rounded-3xl border border-slate-800/60 text-left space-y-4 md:col-span-2 flex flex-col justify-between max-h-[420px]">
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-455 block mb-3">{t("Dispatcher Activity Log")}</span>
+                
+                <div className="space-y-4 overflow-y-auto max-h-[320px] pr-1.5 scrollbar-thin">
+                  {activityLogs.filter(log => log.userId === user.uid).length === 0 ? (
+                    <div className="py-16 text-center text-slate-500 italic">
+                      {t("No activity logs registered under your profile yet.")}
+                    </div>
+                  ) : (
+                    activityLogs.filter(log => log.userId === user.uid).map((log, idx) => (
+                      <div key={idx} className="flex gap-4 text-xs font-semibold leading-relaxed border-b border-slate-850/30 pb-2.5">
+                        <span className="text-slate-500 shrink-0 text-[10px] font-bold w-28">{log.timestamp}</span>
+                        <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0 mt-1.5" />
+                        <span className="text-slate-300">{log.action || log.details}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             </div>
 
