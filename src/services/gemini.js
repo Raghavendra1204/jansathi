@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { getReportRegion } from '../utils/regions';
 
 const geminiApiKey = import.meta.env.VITE_GEMINI_API_KEY;
 const isMockGemini = !geminiApiKey || geminiApiKey.includes('YOUR_GEMINI_API_KEY') || geminiApiKey.trim() === '';
@@ -159,10 +160,29 @@ function localMockOfficerChatResponder(history, reports) {
   const inProgressClaims = reports.filter(r => r.status === 'In Progress').length;
   const resolvedClaims = reports.filter(r => r.status === 'Resolved').length;
 
+  if (userText.includes('state') || userText.includes('district') || userText.includes('city') || userText.includes('ward') || userText.includes('karnataka') || userText.includes('maharashtra') || userText.includes('delhi') || userText.includes('tamil nadu') || userText.includes('place') || userText.includes('location')) {
+    const states = reports.reduce((acc, r) => {
+      const region = getReportRegion(r);
+      const st = region.state || 'Unknown';
+      acc[st] = (acc[st] || 0) + 1;
+      return acc;
+    }, {});
+    const cities = reports.reduce((acc, r) => {
+      const region = getReportRegion(r);
+      const ct = region.city || 'Unknown';
+      acc[ct] = (acc[ct] || 0) + 1;
+      return acc;
+    }, {});
+    return `Operational Geographic Distribution: active states: ` + 
+      Object.entries(states).map(([s, c]) => `${s} (${c} issues)`).join(', ') + 
+      `. Active cities: ` + 
+      Object.entries(cities).map(([ct, c]) => `${ct} (${c} issues)`).join(', ') + `.`;
+  }
   if (userText.includes('priority') || userText.includes('highest')) {
     const highest = [...reports].sort((a, b) => b.priorityScore - a.priorityScore)[0];
     if (highest) {
-      return `The highest priority issue currently is "${highest.title}" in ${highest.location} with a safety risk rating of ${highest.priorityScore}/100. Category: ${highest.category}.`;
+      const region = getReportRegion(highest);
+      return `The highest priority issue currently is "${highest.title}" in ${highest.location} (${region.city}, ${region.state}, ${region.ward}) with a safety risk rating of ${highest.priorityScore}/100. Category: ${highest.category}.`;
     }
     return "I couldn't find any pending issues in the database right now.";
   }
@@ -177,12 +197,12 @@ function localMockOfficerChatResponder(history, reports) {
   if (userText.includes('sanitation') || userText.includes('trash') || userText.includes('garbage')) {
     const sanitationIssues = reports.filter(r => r.category === 'Sanitation' && r.status !== 'Resolved');
     return `There are currently ${sanitationIssues.length} pending sanitation issues. ` + 
-      (sanitationIssues.length > 0 ? `Nearest one is at "${sanitationIssues[0].location}".` : "The sanitation queue is clear!");
+      (sanitationIssues.length > 0 ? `Nearest one is at "${sanitationIssues[0].location}" in ${getReportRegion(sanitationIssues[0]).city}.` : "The sanitation queue is clear!");
   }
   if (userText.includes('summary') || userText.includes('overview')) {
     return `Jan Sathi Executive Summary: We have ${reports.length} total registered reports. ${pendingClaims} are awaiting dispatch review, ${inProgressClaims} are actively in progress, and ${resolvedClaims} have been resolved successfully. AI has predicted a high priority for Ward 17.`;
   }
-  return "I can read your database in real time. Try asking: 'What is the highest priority issue?', 'Show department workloads', 'How many sanitation complaints are pending?', or 'Give me a summary report'.";
+  return "I can read your database in real time. Try asking: 'What is the highest priority issue?', 'Show department workloads', 'How many sanitation complaints are pending?', 'Show geographic distribution of reports', or 'Give me a summary report'.";
 }
 
 /**
@@ -200,20 +220,29 @@ export async function officerChatWithGemini(history, reports) {
       systemInstruction: `You are the Jan Sathi Smart Operations Assistant for Municipal Government Officers. 
 Your job is to help officers analyze incoming citizen reports, coordinate dispatches, check workloads, and summarize active city alerts.
 You have real-time access to the active reports database of the city. Use the reports array provided to answer the officer's questions accurately with actual figures and details. 
+The reports database includes structured geographic hierarchy fields: state, district, city, sector, and ward. Use these to answer queries about specific regions, states, cities, sectors, or wards.
 Keep your answers brief, analytical, and professional.`
     });
 
-    const reportsSummary = JSON.stringify(reports.map(r => ({
-      id: r.id.substring(0, 8),
-      title: r.title,
-      category: r.category,
-      status: r.status,
-      severity: r.severity,
-      priorityScore: r.priorityScore,
-      location: r.location,
-      assignedDepartment: r.assignedDepartment || 'Unassigned',
-      date: r.date
-    })));
+    const reportsSummary = JSON.stringify(reports.map(r => {
+      const region = getReportRegion(r);
+      return {
+        id: r.id.substring(0, 8),
+        title: r.title,
+        category: r.category,
+        status: r.status,
+        severity: r.severity,
+        priorityScore: r.priorityScore,
+        location: r.location,
+        state: region.state || '',
+        district: region.district || '',
+        city: region.city || '',
+        sector: region.sector || '',
+        ward: region.ward || '',
+        assignedDepartment: r.assignedDepartment || 'Unassigned',
+        date: r.date
+      };
+    }));
 
     const contents = [
       {

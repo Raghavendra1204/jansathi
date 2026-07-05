@@ -2547,17 +2547,40 @@ export default function OfficerDashboard() {
 
         // 4. WARD STATISTICS SUB-VIEW
         if (viewParam === 'wards') {
-          const wards = ['Indiranagar', 'Koramangala', 'Whitefield', 'Malleshwaram', 'Downtown', 'Broadway'];
+          // Extract unique active places from the reports database
+          const activePlacesMap = {};
+          reports.forEach(r => {
+            const region = getReportRegion(r);
+            if (region.state && region.city && region.ward) {
+              const key = `${region.state} | ${region.district} | ${region.city} | ${region.sector} | ${region.ward}`;
+              if (!activePlacesMap[key]) {
+                activePlacesMap[key] = {
+                  state: region.state,
+                  district: region.district,
+                  city: region.city,
+                  sector: region.sector,
+                  ward: region.ward,
+                  matches: []
+                };
+              }
+              activePlacesMap[key].matches.push(r);
+            }
+          });
 
-          const wardStats = wards.map(ward => {
-            const matches = reports.filter(r => (r.location || '').toLowerCase().includes(ward.toLowerCase()));
+          // Convert to array and calculate statistics
+          const placeStats = Object.values(activePlacesMap).map(place => {
+            const matches = place.matches;
             const pending = matches.filter(r => r.status === 'Pending' || r.status === 'Submitted' || r.status === 'Resources Assigned').length;
             const progress = matches.filter(r => r.status === 'In Progress').length;
             const resolved = matches.filter(r => r.status === 'Resolved').length;
             const critical = matches.filter(r => r.severity === 'Critical').length;
 
             return {
-              name: ward,
+              state: place.state,
+              district: place.district,
+              city: place.city,
+              sector: place.sector,
+              ward: place.ward,
               total: matches.length,
               pending,
               progress,
@@ -2566,11 +2589,14 @@ export default function OfficerDashboard() {
             };
           });
 
+          // Sort places so that most active wards are first
+          placeStats.sort((a, b) => b.total - a.total);
+
           return (
             <div className="space-y-8 animate-fade-in text-left">
               <div className="border-b border-slate-800/60 pb-3">
                 <h2 className="text-lg font-black text-white tracking-tight uppercase">{t("Regional Ward Statistics")}</h2>
-                <p className="text-slate-455 text-xs mt-0.5">{t("Wards layout stats detailing incident counts and resolution status.")}</p>
+                <p className="text-slate-455 text-xs mt-0.5">{t("Dynamic registered places detailing report counts and resolution tracking.")}</p>
               </div>
 
               <div className="glass p-6 rounded-3xl border border-slate-800/60 overflow-hidden">
@@ -2578,7 +2604,9 @@ export default function OfficerDashboard() {
                   <table className="w-full text-xs text-left border-collapse">
                     <thead>
                       <tr className="border-b border-slate-850 text-slate-500 text-[9px] font-black uppercase tracking-widest pb-3">
-                        <th className="py-3 px-4">{t("Ward Name")}</th>
+                        <th className="py-3 px-4">{t("State / City")}</th>
+                        <th className="py-3 px-4">{t("Sector / Zone")}</th>
+                        <th className="py-3 px-4">{t("Ward")}</th>
                         <th className="py-3 px-4">{t("Total Reports")}</th>
                         <th className="py-3 px-4">{t("Pending Action")}</th>
                         <th className="py-3 px-4">{t("In Progress")}</th>
@@ -2587,16 +2615,24 @@ export default function OfficerDashboard() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-850/50">
-                      {wardStats.map((ward, idx) => (
-                        <tr key={idx} className="hover:bg-slate-900/10 transition-colors">
-                          <td className="py-4 px-4 font-black text-white">{ward.name}</td>
-                          <td className="py-4 px-4 font-bold text-slate-300">{ward.total}</td>
-                          <td className="py-4 px-4"><span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold">{ward.pending}</span></td>
-                          <td className="py-4 px-4"><span className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[10px] font-bold">{ward.progress}</span></td>
-                          <td className="py-4 px-4"><span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-450 border border-emerald-500/20 text-[10px] font-bold">{ward.resolved}</span></td>
-                          <td className="py-4 px-4"><span className={`px-2 py-0.5 rounded text-[10px] font-bold ${ward.critical > 0 ? 'bg-red-500/10 text-red-400 border border-red-500/20 animate-pulse' : 'bg-slate-800 text-slate-500'}`}>{ward.critical}</span></td>
+                      {placeStats.length === 0 ? (
+                        <tr>
+                          <td colSpan="8" className="py-8 text-center text-slate-550 font-bold">{t("No active issues registered in any region yet.")}</td>
                         </tr>
-                      ))}
+                      ) : (
+                        placeStats.map((place, idx) => (
+                          <tr key={idx} className="hover:bg-slate-900/10 transition-colors">
+                            <td className="py-4 px-4 font-bold text-slate-400">{place.state} → {place.city}</td>
+                            <td className="py-4 px-4 text-slate-350 font-semibold">{place.sector}</td>
+                            <td className="py-4 px-4 font-black text-white">{place.ward}</td>
+                            <td className="py-4 px-4 font-bold text-slate-300">{place.total}</td>
+                            <td className="py-4 px-4"><span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold">{place.pending}</span></td>
+                            <td className="py-4 px-4"><span className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[10px] font-bold">{place.progress}</span></td>
+                            <td className="py-4 px-4"><span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-450 border border-emerald-500/20 text-[10px] font-bold">{place.resolved}</span></td>
+                            <td className="py-4 px-4"><span className={`px-2 py-0.5 rounded text-[10px] font-bold ${place.critical > 0 ? 'bg-red-500/10 text-red-400 border border-red-500/20 animate-pulse' : 'bg-slate-800 text-slate-500'}`}>{place.critical}</span></td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
