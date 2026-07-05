@@ -551,6 +551,26 @@ export async function createReport(title, category, location, description, image
   const currentSession = JSON.parse(localStorage.getItem('mock_current_user') || '{}');
   const uid = currentSession.uid || 'unknown_user';
 
+  // Construct structured location object
+  let structuredLocation = null;
+  if (location && typeof location === 'object') {
+    structuredLocation = location;
+  } else {
+    structuredLocation = {
+      country: 'India',
+      state: regionState || 'Karnataka',
+      district: regionDistrict || 'Bengaluru Urban',
+      city: regionCity || 'Bengaluru',
+      taluka: regionSector || 'East Sector',
+      village: '',
+      ward: regionWard || 'Unknown Ward',
+      postalCode: '',
+      latitude: parseFloat(lat) || 12.9716,
+      longitude: parseFloat(lng) || 77.5946,
+      address: location || 'Unknown Address'
+    };
+  }
+
   if (isMockFirebase) {
     await new Promise(resolve => setTimeout(resolve, 500));
     const reports = getStoredReports();
@@ -559,7 +579,7 @@ export async function createReport(title, category, location, description, image
       userId: uid,
       title,
       category,
-      location,
+      location: structuredLocation,
       date: new Date().toISOString().split('T')[0],
       reporterName,
       reporterAvatar: reporterAvatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150',
@@ -572,13 +592,13 @@ export async function createReport(title, category, location, description, image
       status: 'Pending',
       votedUsers: {},
       comments: [],
-      lat,
-      lng,
-      regionState,
-      regionDistrict,
-      regionCity,
-      regionSector,
-      regionWard
+      lat: structuredLocation.latitude,
+      lng: structuredLocation.longitude,
+      regionState: structuredLocation.state,
+      regionDistrict: structuredLocation.district,
+      regionCity: structuredLocation.city,
+      regionSector: structuredLocation.taluka,
+      regionWard: structuredLocation.ward
     };
 
     reports.unshift(newReport);
@@ -609,7 +629,7 @@ export async function createReport(title, category, location, description, image
       userId: auth.currentUser?.uid || uid,
       title,
       category,
-      location,
+      location: structuredLocation,
       date: new Date().toISOString().split('T')[0],
       reporterName,
       reporterAvatar: reporterAvatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150',
@@ -622,13 +642,13 @@ export async function createReport(title, category, location, description, image
       status: 'Pending',
       votedUsers: {},
       comments: [],
-      lat,
-      lng,
-      regionState,
-      regionDistrict,
-      regionCity,
-      regionSector,
-      regionWard
+      lat: structuredLocation.latitude,
+      lng: structuredLocation.longitude,
+      regionState: structuredLocation.state,
+      regionDistrict: structuredLocation.district,
+      regionCity: structuredLocation.city,
+      regionSector: structuredLocation.taluka,
+      regionWard: structuredLocation.ward
     };
 
     const docRef = await addDoc(collection(db, 'reports'), newReport);

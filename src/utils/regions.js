@@ -48,39 +48,37 @@ export const REGIONS_DATA = {
 export function getReportRegion(report) {
   if (!report) return { state: '', district: '', city: '', sector: '', ward: '' };
 
-  if (report.regionState && report.regionDistrict && report.regionCity && report.regionSector && report.regionWard) {
+  // If a structured location object exists
+  if (report.location && typeof report.location === 'object') {
+    const loc = report.location;
     return {
-      state: report.regionState,
-      district: report.regionDistrict,
-      city: report.regionCity,
-      sector: report.regionSector,
-      ward: report.regionWard
+      state: loc.state || '',
+      district: loc.district || '',
+      city: loc.city || loc.district || '',
+      sector: loc.taluka || '',
+      ward: loc.ward || 'Unknown Ward'
     };
   }
 
-  const idStr = report.id || report.title || 'default-id';
-  let hash = 0;
-  for (let i = 0; i < idStr.length; i++) {
-    hash = idStr.charCodeAt(i) + ((hash << 5) - hash);
+  // Fallback to legacy/flat fields (e.g. if regionState exists on report directly)
+  if (report.regionState) {
+    return {
+      state: report.regionState || '',
+      district: report.regionDistrict || '',
+      city: report.regionCity || '',
+      sector: report.regionSector || '',
+      ward: report.regionWard || 'Unknown Ward'
+    };
   }
-  hash = Math.abs(hash);
 
-  const states = Object.keys(REGIONS_DATA);
-  const state = states[hash % states.length];
-
-  const districts = Object.keys(REGIONS_DATA[state]);
-  const district = districts[hash % districts.length];
-
-  const cities = Object.keys(REGIONS_DATA[state][district]);
-  const city = cities[hash % cities.length];
-
-  const sectors = Object.keys(REGIONS_DATA[state][district][city]);
-  const sector = sectors[hash % sectors.length];
-
-  const wards = REGIONS_DATA[state][district][city][sector];
-  const ward = wards[hash % wards.length];
-
-  return { state, district, city, sector, ward };
+  // If no location structure at all, do NOT assign random values. Return empty/unknown!
+  return {
+    state: 'Unknown State',
+    district: 'Unknown District',
+    city: 'Unknown City',
+    sector: 'Unknown Sector',
+    ward: 'Unknown Ward'
+  };
 }
 
 export function getRegionCoordinates(state, city) {
@@ -105,4 +103,69 @@ export function getRegionCoordinates(state, city) {
     return coordinates[state][city];
   }
   return [20.5937, 78.9629];
+}
+
+export async function reverseGeocode(lat, lng) {
+  try {
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
+      { headers: { 'User-Agent': 'JanSathi-App/1.0' } }
+    );
+    if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+    const data = await response.json();
+    
+    if (data && data.address) {
+      const addr = data.address;
+      
+      return {
+        country: addr.country || '',
+        state: addr.state || '',
+        district: addr.state_district || addr.county || addr.district || '',
+        city: addr.city || addr.town || addr.municipality || addr.suburb || '',
+        taluka: addr.county || addr.subdistrict || addr.taluk || '',
+        village: addr.village || addr.neighbourhood || addr.suburb || addr.hamlet || '',
+        ward: addr.ward || '',
+        postalCode: addr.postcode || '',
+        latitude: parseFloat(lat),
+        longitude: parseFloat(lng),
+        address: data.display_name || ''
+      };
+    }
+  } catch (error) {
+    console.error("Reverse geocoding failed:", error);
+  }
+  return null;
+}
+
+export async function geocodeAddress(address) {
+  try {
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1&addressdetails=1`,
+      { headers: { 'User-Agent': 'JanSathi-App/1.0' } }
+    );
+    if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+    const data = await response.json();
+    
+    if (data && data.length > 0) {
+      const first = data[0];
+      const addr = first.address || {};
+      
+      return {
+        country: addr.country || '',
+        state: addr.state || '',
+        district: addr.state_district || addr.county || addr.district || '',
+        city: addr.city || addr.town || addr.municipality || addr.suburb || '',
+        taluka: addr.county || addr.subdistrict || addr.taluk || '',
+        village: addr.village || addr.neighbourhood || addr.suburb || addr.hamlet || '',
+        ward: addr.ward || '',
+        postalCode: addr.postcode || '',
+        latitude: parseFloat(first.lat),
+        longitude: parseFloat(first.lon),
+        address: first.display_name || address
+      };
+    }
+  } catch (error) {
+    console.error("Geocoding address failed:", error);
+  }
+  return null;
 }

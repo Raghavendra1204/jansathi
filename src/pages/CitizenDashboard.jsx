@@ -118,6 +118,59 @@ export default function CitizenDashboard() {
   const [selectedSector, setSelectedSector] = useState('');
   const [selectedWard, setSelectedWard] = useState('');
 
+  const uniqueStates = useMemo(() => {
+    const states = new Set();
+    reports.forEach(r => {
+      const region = getReportRegion(r);
+      if (region.state) states.add(region.state);
+    });
+    return Array.from(states).sort();
+  }, [reports]);
+
+  const uniqueDistricts = useMemo(() => {
+    const districts = new Set();
+    reports.forEach(r => {
+      const region = getReportRegion(r);
+      if (region.state === selectedState && region.district) {
+        districts.add(region.district);
+      }
+    });
+    return Array.from(districts).sort();
+  }, [reports, selectedState]);
+
+  const uniqueCities = useMemo(() => {
+    const cities = new Set();
+    reports.forEach(r => {
+      const region = getReportRegion(r);
+      if (region.state === selectedState && region.district === selectedDistrict && region.city) {
+        cities.add(region.city);
+      }
+    });
+    return Array.from(cities).sort();
+  }, [reports, selectedState, selectedDistrict]);
+
+  const uniqueSectors = useMemo(() => {
+    const sectors = new Set();
+    reports.forEach(r => {
+      const region = getReportRegion(r);
+      if (region.state === selectedState && region.district === selectedDistrict && region.city === selectedCity && region.sector) {
+        sectors.add(region.sector);
+      }
+    });
+    return Array.from(sectors).sort();
+  }, [reports, selectedState, selectedDistrict, selectedCity]);
+
+  const uniqueWards = useMemo(() => {
+    const wards = new Set();
+    reports.forEach(r => {
+      const region = getReportRegion(r);
+      if (region.state === selectedState && region.district === selectedDistrict && region.city === selectedCity && region.sector === selectedSector && region.ward) {
+        wards.add(region.ward);
+      }
+    });
+    return Array.from(wards).sort();
+  }, [reports, selectedState, selectedDistrict, selectedCity, selectedSector]);
+
   const matchesStatusFilter = (r) => {
     if (statusFilter === 'All') return true;
     if (statusFilter === 'Pending') {
@@ -159,11 +212,12 @@ export default function CitizenDashboard() {
         let updated = false;
         const migratedData = await Promise.all(data.map(async (r) => {
           const isDefaultCoords = (Math.abs(r.lat - 12.9716) < 0.0001 && Math.abs(r.lng - 77.5946) < 0.0001) || !r.lat;
-          const isCustomLocation = r.location && !r.location.includes('Bengaluru') && !r.location.includes('Pine Street') && !r.location.includes('Broadway') && !r.location.includes('Oak Park');
+          const locText = r.location && typeof r.location === 'object' ? r.location.address : r.location;
+          const isCustomLocation = locText && !locText.includes('Bengaluru') && !locText.includes('Pine Street') && !locText.includes('Broadway') && !locText.includes('Oak Park');
           
           if (isDefaultCoords && isCustomLocation) {
             try {
-              const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(r.location)}&limit=1`);
+              const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(locText)}&limit=1`);
               const geocode = await res.json();
               if (geocode && geocode.length > 0) {
                 r.lat = parseFloat(geocode[0].lat);
@@ -171,7 +225,7 @@ export default function CitizenDashboard() {
                 updated = true;
               }
             } catch (err) {
-              console.error("Migration geocode failed for location:", r.location, err);
+              console.error("Migration geocode failed for location:", locText, err);
             }
           }
           return r;
@@ -628,7 +682,7 @@ export default function CitizenDashboard() {
               className="w-full px-3 py-2 bg-slate-950/80 border border-slate-850/80 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-blue-600 transition-colors cursor-pointer font-semibold"
             >
               <option value="">{t("All States")}</option>
-              {Object.keys(REGIONS_DATA).map(st => (
+              {uniqueStates.map(st => (
                 <option key={st} value={st}>{t(st)}</option>
               ))}
             </select>
@@ -649,7 +703,7 @@ export default function CitizenDashboard() {
               className="w-full px-3 py-2 bg-slate-950/80 border border-slate-850/80 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-blue-600 transition-colors cursor-pointer font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <option value="">{t("All Districts")}</option>
-              {selectedState && Object.keys(REGIONS_DATA[selectedState]).map(dist => (
+              {uniqueDistricts.map(dist => (
                 <option key={dist} value={dist}>{t(dist)}</option>
               ))}
             </select>
@@ -669,7 +723,7 @@ export default function CitizenDashboard() {
               className="w-full px-3 py-2 bg-slate-950/80 border border-slate-850/80 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-blue-600 transition-colors cursor-pointer font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <option value="">{t("All Cities")}</option>
-              {selectedState && selectedDistrict && Object.keys(REGIONS_DATA[selectedState][selectedDistrict]).map(ct => (
+              {uniqueCities.map(ct => (
                 <option key={ct} value={ct}>{t(ct)}</option>
               ))}
             </select>
@@ -688,7 +742,7 @@ export default function CitizenDashboard() {
               className="w-full px-3 py-2 bg-slate-950/80 border border-slate-850/80 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-blue-600 transition-colors cursor-pointer font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <option value="">{t("All Sectors")}</option>
-              {selectedState && selectedDistrict && selectedCity && Object.keys(REGIONS_DATA[selectedState][selectedDistrict][selectedCity]).map(sec => (
+              {uniqueSectors.map(sec => (
                 <option key={sec} value={sec}>{t(sec)}</option>
               ))}
             </select>
@@ -704,7 +758,7 @@ export default function CitizenDashboard() {
               className="w-full px-3 py-2 bg-slate-950/80 border border-slate-850/80 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-blue-600 transition-colors cursor-pointer font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <option value="">{t("All Wards")}</option>
-              {selectedState && selectedDistrict && selectedCity && selectedSector && REGIONS_DATA[selectedState][selectedDistrict][selectedCity][selectedSector].map(wd => (
+              {uniqueWards.map(wd => (
                 <option key={wd} value={wd}>{t(wd)}</option>
               ))}
             </select>
@@ -815,7 +869,7 @@ export default function CitizenDashboard() {
                       <div className={`flex items-center justify-between text-[9px] font-bold pt-2 border-t transition-colors duration-300 ${theme === 'light' ? 'border-slate-200' : 'border-slate-800/50'}`}>
                         <span className={`flex items-center gap-1 truncate pr-2 transition-colors duration-300 ${theme === 'light' ? 'text-blue-900' : 'text-slate-455'}`}>
                           <MapPin className={`w-3 h-3 shrink-0 transition-colors duration-300 ${theme === 'light' ? 'text-blue-600' : 'text-slate-550'}`} />
-                          <span className="truncate">{t(selectedMapReport.location)}</span>
+                          <span className="truncate">{t(selectedMapReport.location && typeof selectedMapReport.location === 'object' ? selectedMapReport.location.address : selectedMapReport.location)}</span>
                         </span>
                         <button 
                           type="button"
@@ -912,7 +966,7 @@ export default function CitizenDashboard() {
                   <div className="flex items-center gap-3">
                     <span className="flex items-center gap-1">
                       <MapPin className="w-3 h-3 text-slate-500" />
-                      <span>{t(report.location)}</span>
+                      <span>{t(report.location && typeof report.location === 'object' ? report.location.address : report.location)}</span>
                     </span>
                     <span>•</span>
                     <span>{formatDate(report.date)}</span>
@@ -1145,7 +1199,7 @@ export default function CitizenDashboard() {
                             <span className="block text-[10px] font-bold text-slate-700 dark:text-brand-300 uppercase">{t("Step 1: Submission Received")}</span>
                             <div className="mt-1 text-[11px] text-slate-500 dark:text-slate-400 space-y-1">
                               <p>• <strong>{t("Report Date/Time")}:</strong> {formatDate(report.date)} 09:30 AM</p>
-                              <p>• <strong>{t("Report Location")}:</strong> {t(report.location)}</p>
+                              <p>• <strong>{t("Report Location")}:</strong> {t(report.location && typeof report.location === 'object' ? report.location.address : report.location)}</p>
                               <p>• <strong>{t("Initial Severity")}:</strong> {t(report.severity || "Medium")}</p>
                             </div>
                           </div>
@@ -1228,7 +1282,7 @@ export default function CitizenDashboard() {
                                 setEditingReport(report);
                                 setEditTitle(report.title);
                                 setEditCategory(report.category);
-                                setEditLocation(report.location);
+                                setEditLocation(report.location && typeof report.location === 'object' ? report.location.address : report.location);
                                 setEditSeverity(report.severity || 'Low');
                                 setEditDescription(report.description);
                               }}
